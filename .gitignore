@@ -1,0 +1,8 @@
+﻿# Ignorar arquivos temporários do CMake e build
+cmake-build-*/
+build/
+out/
+.vs/
+*.sln
+*.vcxproj
+.idea
