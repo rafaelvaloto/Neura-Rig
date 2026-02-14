@@ -1,115 +1,78 @@
-﻿#include <iostream>
-#pragma warning(push)
-#pragma warning(disable : 4244)
-#pragma warning(disable : 4267)
-#pragma warning(disable : 4996)
-#pragma warning(disable : 4702)
-#include <torch/torch.h>
-#pragma warning(pop)
+﻿#include "NRInterfaces/INRModel.h"
+#include "NRTrainee/NRTrainee.h"
+#include <iostream>
 
-// Helper function to translate the AI output ID into readable text
-std::string ActionToText(int64_t id)
-{ // Alterado para int64_t
-	if (id == 0)
+// Implementação simples de INRModel para teste
+class MockModel : public NR::INRModel<float>
+{
+public:
+	MockModel()
 	{
-		return "RUN AWAY (Low Health)";
+		linear = register_module("linear", torch::nn::Linear(3, 3));
 	}
-	if (id == 1)
+
+	torch::Tensor Forward(torch::Tensor Input) override
 	{
-		return "ATTACK   (Close + Good Health)";
+		return linear->forward(Input);
 	}
-	return "HEAL     (Far/Safe)";
-}
+
+	void SaveModel(const std::string& /*FilePath*/) override {}
+	void LoadModel(const std::string& /*FilePath*/) override {}
+
+private:
+	torch::nn::Linear linear{nullptr};
+};
 
 int main()
 {
-	std::cout << "PyTorch version from parts: "
-	          << TORCH_VERSION_MAJOR << "."
-	          << TORCH_VERSION_MINOR << "."
-	          << TORCH_VERSION_PATCH << std::endl;
 	std::cout << "PyTorch version: " << TORCH_VERSION << std::endl;
 
-	std::cout << "=== QUICK TRAINING (NO SAVE) ===" << std::endl;
+	std::cout << "=== QUICK TRAINING (TRAINEE TEST) ===" << std::endl;
 
-	// Inputs: [Distance, Health] (0.0 to 1.0)
-	int32_t n = 1000;
-	torch::Tensor inputs = torch::rand({n, 2});
-	torch::Tensor targets = torch::zeros({n}, torch::kLong);
+	// Inject new model in NRTrainee
+	auto model = std::make_shared<MockModel>();
+	NR::NRTrainee<float> trainee(model, 0.1);
 
-	float* data_in = inputs.data_ptr<float>();
-	long long* data_tgt = targets.data_ptr<long long>();
+	std::vector<NR::NRVector3D> inputs = {
+	    {0.0f, 0.0f, 0.0f},
+	    {1.0f, 1.0f, 1.0f},
+	    {2.0f, -1.0f, 0.5f}};
 
-	for (int32_t i = 0; i < n; i++)
+	std::vector<NR::NRVector3D> targets = {
+	    {1.0f, 2.0f, 3.0f},
+	    {2.0f, 3.0f, 4.0f},
+	    {3.0f, 1.0f, 3.5f}};
+
+	std::cout << "Starting training loop..." << std::endl;
+	float last_loss = 0.0f;
+	try
 	{
-		float dist = data_in[i * 2 + 0];
-		float health = data_in[i * 2 + 1];
-
-		if (health < 0.3)
+		for (int i = 0; i < 100; ++i)
 		{
-			data_tgt[i] = 0;
-		}
-		else if (dist < 0.5)
-		{
-			data_tgt[i] = 1;
-		}
-		else
-		{
-			data_tgt[i] = 2;
+			float loss = trainee.TrainStep(inputs, targets);
+			if (i % 10 == 0)
+			{
+				std::cout << "Iteration " << i << " - Loss: " << loss << std::endl;
+			}
+			last_loss = loss;
 		}
 	}
-
-	// --- 2. CREATE MODEL ---
-	torch::nn::Sequential model(
-	    torch::nn::Linear(2, 16), // 2 Inputs -> 16 Hidden Neurons
-	    torch::nn::ReLU(),        // Activation
-	    torch::nn::Linear(16, 3)  // 16 Neurons -> 3 Outputs (Actions)
-	);
-
-	auto optimizer = torch::optim::Adam(model->parameters(), 0.01);
-	auto criterion = torch::nn::CrossEntropyLoss();
-
-	// --- 3. TRAIN ---
-	std::cout << "Training...";
-	for (int32_t epoch = 1; epoch <= 500; ++epoch)
+	catch (const std::exception& e)
 	{
-		optimizer.zero_grad();
-		auto output = model->forward(inputs);
-		auto loss = criterion(output, targets);
-		loss.backward();
-		optimizer.step();
-
-		if (epoch % 100 == 0)
-		{
-			std::cout << "."; // Minimalist progress bar
-		}
+		std::cerr << "EXCEPTION: " << e.what() << std::endl;
+		return 1;
 	}
-	std::cout << " Done!" << std::endl;
+	std::cout << std::flush;
 
-	// --- 4. VALIDATION TEST (CHECK IF IT WORKS) ---
-	std::cout << "=== VALIDATION TEST ===" << std::endl;
+	std::cout << "Final Loss: " << last_loss << std::endl;
 
-	// Manual Test Cases
-	model->eval(); // Set to evaluation mode
-
-	for (int32_t i = 0; i < 3; i++)
+	if (last_loss < 0.1f)
 	{
-		float tests[3][2] = {
-		    {0.1f, 0.1f}, // Case 1: Close and Dying -> Expected: RUN AWAY
-		    {0.2f, 0.9f}, // Case 2: Close and Healthy -> Expected: ATTACK
-		    {0.9f, 0.8f}  // Case 3: Far and Healthy -> Expected: HEAL
-		};
-		// Create tensor for a single case
-		auto t_in = torch::tensor({{tests[i][0], tests[i][1]}});
-
-		// Ask the AI
-		auto t_out = model->forward(t_in);
-
-		// Get the highest probability (argmax)
-		int64_t decision = t_out.argmax(1).item<int64_t>();
-
-		std::cout << "Scenario " << i + 1
-		          << " [Dist: " << tests[i][0] << ", Health: " << tests[i][1] << "] "
-		          << "-> AI decided: " << ActionToText(decision) << std::endl;
+		std::cout << "TEST PASSED: Loss decreased significantly." << std::endl;
+	}
+	else
+	{
+		std::cout << "TEST FAILED: Loss did not decrease as expected." << std::endl;
 	}
 
 	return 0;

@@ -2,21 +2,25 @@
 // Copyright (c) 2026 Rafael Valoto
 // All rights reserved.
 #pragma once
+#include <concepts>
+#include <type_traits>
 #include <vector>
 
-namespace NeuraRig
+namespace NR
 {
 	template<typename T>
-	concept IsRigInput = requires(T a) {
-		{ a.ToTensorData() } -> std::convertible_to<std::vector<float>>;
+	concept FloatingPoint = std::is_floating_point_v<T>;
+
+	template<typename T>
+	concept IsTransform = requires(T v) {
+		{ v.position } -> std::convertible_to<float*>;
+		{ v.rotation } -> std::convertible_to<float*>;
 	};
 
 	template<typename T>
-	concept IsRigOutput = requires(std::vector<float> data) {
-		{ T::FromTensorData(data) } -> std::same_as<T>;
+	concept IsRigStructure = requires(T rig) {
+		{ rig.get_bone_count() } -> std::same_as<size_t>;
+		{ rig.get_root() };
 	};
 
-	class NRConcepts
-	{
-	};
-} // namespace NeuraRig
+} // namespace NR
