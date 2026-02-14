@@ -6,8 +6,9 @@
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T>> TargetModel, double LearningRate)
+	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T>> TargetModel, NRRigDescription Rig, double LearningRate)
 	    : TargetModel(TargetModel)
+	    , RigDesc(Rig)
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
 	}
@@ -15,24 +16,36 @@ namespace NR
 	template<FloatingPoint T>
 	float NRTrainee<T>::TrainStep(const std::vector<NRVector3D>& InputVectors, const std::vector<NRVector3D>& TargetVectors)
 	{
-		at::Tensor InputTensor = torch::from_blob((void*)InputVectors.data(), {static_cast<int64_t>(InputVectors.size()), 3}, torch::kFloat).clone();
-		const auto TargetTensor = torch::from_blob((void*)TargetVectors.data(), {static_cast<int64_t>(TargetVectors.size()), 3}, torch::kFloat).clone();
+		int64_t BatchSize = InputVectors.size() / RigDesc.TargetCount;
 
-		/// Zeros out the gradients of all parameters.
+		at::Tensor InputTensor = torch::from_blob((void*)InputVectors.data(), {BatchSize, RigDesc.GetRequiredInputSize()}, torch::kFloat).clone();
+
+		const auto TargetTensor = torch::from_blob((void*)TargetVectors.data(), {BatchSize, RigDesc.GetRequiredOutputSize()}, torch::kFloat).clone();
+
 		Optimizer->zero_grad();
 
-		// 3. Forward: Try to guess.
 		torch::Tensor prediction = TargetModel->Forward(InputTensor);
-
-		/// Calculate the error
 		torch::Tensor Loss = torch::mse_loss(prediction, TargetTensor);
 
-		/// Computes the gradient of current tensor with respect to graph leaves.
 		Loss.backward();
-
 		Optimizer->step();
+
 		return Loss.item<float>();
 	}
+
+	template<FloatingPoint T>
+	void NRTrainee<T>::SaveWeights(const std::string& Path)
+	{
+		torch::save(TargetModel, Path);
+	}
+
+	template<FloatingPoint T>
+	void NRTrainee<T>::LoadWeights(const std::string& Path)
+	{
+		torch::load(TargetModel, Path);
+		TargetModel->train();
+	}
+
 	template class NRTrainee<float>;
 	template class NRTrainee<double>;
 } // namespace NR

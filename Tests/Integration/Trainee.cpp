@@ -3,24 +3,36 @@
 #include <iostream>
 
 // Implementação simples de INRModel para teste
-class MockModel : public NR::INRModel<float>
+class NRMLPModel : public NR::INRModel<float>
 {
+	torch::nn::Sequential Network;
+
 public:
-	MockModel()
+	NRMLPModel(int64_t InputSize, int64_t HiddenSize, int64_t OutputSize)
 	{
-		linear = register_module("linear", torch::nn::Linear(3, 3));
+		Network = torch::nn::Sequential(
+		    torch::nn::Linear(InputSize, HiddenSize),
+		    torch::nn::ReLU(),
+		    torch::nn::Linear(HiddenSize, HiddenSize),
+		    torch::nn::ReLU(),
+		    torch::nn::Linear(HiddenSize, OutputSize));
+		register_module("Network", Network);
 	}
 
 	torch::Tensor Forward(torch::Tensor Input) override
 	{
-		return linear->forward(Input);
+		return Network->forward(Input);
 	}
 
-	void SaveModel(const std::string& /*FilePath*/) override {}
-	void LoadModel(const std::string& /*FilePath*/) override {}
+	void SaveModel(const std::string& FilePath) override
+	{
+		torch::save(Network, FilePath);
+	}
 
-private:
-	torch::nn::Linear linear{nullptr};
+	void LoadModel(const std::string& FilePath) override
+	{
+		torch::load(Network, FilePath);
+	}
 };
 
 int main()
@@ -29,30 +41,54 @@ int main()
 
 	std::cout << "=== QUICK TRAINING (TRAINEE TEST) ===" << std::endl;
 
+	NR::NRRigDescription MyBotRig = {3, 1};
+
 	// Inject new model in NRTrainee
-	auto model = std::make_shared<MockModel>();
-	NR::NRTrainee<float> trainee(model, 0.1);
+	auto model = std::make_shared<NRMLPModel>(
+	    MyBotRig.GetRequiredInputSize(),
+	    64,
+	    MyBotRig.GetRequiredOutputSize());
+	NR::NRTrainee<float> trainee(model, MyBotRig, 0.1);
 
+	std::cout << "=== model ===" << std::endl;
+	// 2 amostras de treino
 	std::vector<NR::NRVector3D> inputs = {
-	    {0.0f, 0.0f, 0.0f},
-	    {1.0f, 1.0f, 1.0f},
-	    {2.0f, -1.0f, 0.5f}};
+	    {0.0f, 0.0f, 0.0f}, // Alvo amostra 1
+	    {1.0f, 1.0f, 1.0f}  // Alvo amostra 2
+	};
 
+	std::cout << "=== inputs ===" << std::endl;
+	// Para cada entrada, precisamos de 3 saídas (uma para cada osso)
 	std::vector<NR::NRVector3D> targets = {
-	    {1.0f, 2.0f, 3.0f},
-	    {2.0f, 3.0f, 4.0f},
-	    {3.0f, 1.0f, 3.5f}};
+	    // Saída para Amostra 1 (3 ossos)
+	    {0.1f, 0.1f, 0.1f},
+	    {0.2f, 0.2f, 0.2f},
+	    {0.3f, 0.3f, 0.3f},
 
+	    // Saída para Amostra 2 (3 ossos)
+	    {1.1f, 1.1f, 1.1f},
+	    {1.2f, 1.2f, 1.2f},
+	    {1.3f, 1.3f, 1.3f}};
+
+	std::cout << "=== targets ===" << std::endl;
 	std::cout << "Starting training loop..." << std::endl;
 	float last_loss = 0.0f;
 	try
 	{
-		for (int i = 0; i < 100; ++i)
+		for (int i = 0; i < 1000; ++i) // Limite alto de segurança
 		{
 			float loss = trainee.TrainStep(inputs, targets);
 			if (i % 10 == 0)
 			{
 				std::cout << "Iteration " << i << " - Loss: " << loss << std::endl;
+			}
+
+			// Se a Loss já for insignificante, para o treino
+			if (loss < 0.0001f)
+			{
+				std::cout << "Convergence reached at epoch " << i << std::endl;
+				last_loss = loss;
+				break;
 			}
 			last_loss = loss;
 		}

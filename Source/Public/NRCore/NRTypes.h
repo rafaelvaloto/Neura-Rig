@@ -18,4 +18,13 @@ namespace NR
 	{
 		float x, y, z;
 	};
+
+	struct NRRigDescription
+	{
+		int64_t BoneCount;
+		int64_t TargetCount;
+
+		int64_t GetRequiredInputSize() const { return TargetCount * 3; }
+		int64_t GetRequiredOutputSize() const { return BoneCount * 3; }
+	};
 } // namespace NR
