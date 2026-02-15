@@ -63,6 +63,22 @@ namespace NR
 		return bytesReceived;
 	}
 
+	int NRNetwork::Receive(std::vector<char>& outBuffer)
+	{
+		char buffer[4096];
+		sockaddr_in clientAddr;
+		int clientSize = sizeof(clientAddr);
+
+		int bytesReceived = recvfrom(serverSocket, buffer, sizeof(buffer), 0, (sockaddr*)&clientAddr, &clientSize);
+
+		if (bytesReceived > 0)
+		{
+			// Copia os bytes brutos, 1 para 1
+			outBuffer.assign(buffer, buffer + bytesReceived);
+		}
+		return bytesReceived;
+	}
+
 	void NRNetwork::Stop()
 	{
 		if (serverSocket != INVALID_SOCKET)

@@ -49,6 +49,7 @@ namespace NR
 		 * @return Number of bytes received, or -1 on error.
 		 */
 		int Receive(std::vector<float>& outBuffer);
+		int Receive(std::vector<char>& outBuffer);
 
 		/**
 		 * @brief Stops the server and closes the socket connection.

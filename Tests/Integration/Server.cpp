@@ -22,8 +22,6 @@ int main()
 			int bytes = Network.Receive(data);
 			if (bytes > 0)
 			{
-				std::cout << "Received " << bytes << " bytes." << std::endl;
-
 				if (bytes == 24)
 				{
 					double receivedVector[3];
@@ -35,17 +33,15 @@ int main()
 
 					std::cout << "Message Content -> X: " << X << " Y: " << Y << " Z: " << Z << std::endl;
 				}
-
-				std::string msg((char*)data.data(), bytes);
-				if (msg == "PING_TEST")
-				{
-					std::cout << "Ping received successfully!" << std::endl;
-				}
 			}
 			else if (bytes < 0)
 			{
 				std::cerr << "Receive error!" << std::endl;
 				break;
+			}
+			else
+			{
+				std::cout << "Ping received package[" << bytes << "] bytes." << std::endl;
 			}
 		}
 	}
