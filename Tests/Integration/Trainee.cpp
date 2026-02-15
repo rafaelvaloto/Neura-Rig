@@ -1,4 +1,8 @@
-﻿#include "NRInterfaces/INRModel.h"
+﻿// Project: NeuralRig
+// Copyright (c) 2026 rafae
+// All rights reserved.
+
+#include "NRInterfaces/INRModel.h"
 #include "NRTrainee/NRTrainee.h"
 #include <iostream>
 

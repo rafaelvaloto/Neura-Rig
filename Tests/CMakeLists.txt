@@ -1,44 +1,35 @@
 ﻿# 1. Encontrar os arquivos fonte
-file(GLOB_RECURSE TEST_SOURCES "Integration/*.cpp")
+set(TRAINEE_SOURCES "Integration/Trainee.cpp")
+set(SERVER_SOURCES "Integration/Server.cpp")
 
-# 2. PRIMEIRO: Criar o executável (Só uma vez!)
-add_executable(SimpleTrainer ${TEST_SOURCES})
+# 2. Criar os executáveis
+add_executable(SimpleTrainer ${TRAINEE_SOURCES})
+add_executable(NRServer ${SERVER_SOURCES})
 
-# 3. AGORA SIM: Configurar opções de compilação (Depois de criar o alvo)
-if (MSVC)
-    # Opções gerais
-    target_compile_options(SimpleTrainer PRIVATE /W4 /permissive-)
+# 3. Configurar opções de compilação
+foreach(TARGET_NAME SimpleTrainer NRServer)
+    if (MSVC)
+        # Opções gerais
+        target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
 
-    # Desabilitar warnings chatos do LibTorch
-    target_compile_options(SimpleTrainer PRIVATE /wd4244 /wd4267 /wd4996)
-else()
-    target_compile_options(SimpleTrainer PRIVATE -Wall -Wextra -pedantic)
-endif ()
+        # Desabilitar warnings chatos do LibTorch
+        target_compile_options(${TARGET_NAME} PRIVATE /wd4244 /wd4267 /wd4996)
+    else()
+        target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -pedantic)
+    endif ()
 
-# 4. Linkar bibliotecas
-target_link_libraries(SimpleTrainer PRIVATE NeuralRig ${TORCH_LIBRARIES})
+    # 4. Linkar bibliotecas
+    target_link_libraries(${TARGET_NAME} PRIVATE NeuralRig ${TORCH_LIBRARIES})
 
-# 5. Copiar DLLs no Windows (Pós-build)
-if(MSVC)
-    # Copia DLLs do Torch para a pasta do executável automaticamente
-    add_custom_command(TARGET SimpleTrainer POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${TORCH_INSTALL_PREFIX}/lib/torch_cpu.dll"
-            "${TORCH_INSTALL_PREFIX}/lib/c10.dll"
-            "${TORCH_INSTALL_PREFIX}/lib/torch.dll"
-            # Adicione outras DLLs se necessário (intel_omp, etc)
-            $<TARGET_FILE_DIR:SimpleTrainer>
-            COMMENT "Copiando DLLs do Torch para o SimpleTrainer..."
-            COMMAND_EXPAND_LISTS
-    )
-
-    # Maneira alternativa (Copia tudo *.dll da pasta lib) - O seu jeito anterior
-    file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
-    add_custom_command(TARGET SimpleTrainer POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${TORCH_DLLS}
-            $<TARGET_FILE_DIR:SimpleTrainer>
-            COMMENT "Copiando todas as DLLs do Torch..."
-            COMMAND_EXPAND_LISTS
-    )
-endif()
+    # 5. Copiar DLLs no Windows (Pós-build)
+    if(MSVC)
+        file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${TORCH_DLLS}
+                $<TARGET_FILE_DIR:${TARGET_NAME}>
+                COMMENT "Copiando DLLs do Torch para ${TARGET_NAME}..."
+                COMMAND_EXPAND_LISTS
+        )
+    endif()
+endforeach()
