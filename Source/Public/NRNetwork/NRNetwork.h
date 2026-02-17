@@ -1,5 +1,5 @@
-﻿// Project: NeuralRig
-// Copyright (c) 2026 rafae
+﻿// Project: NeuraRig
+// Copyright (c) 2026 Rafael Valoto
 // All rights reserved.
 #pragma once
 #include "NRCore/NRTypes.h"

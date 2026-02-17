@@ -1,9 +1,6 @@
-﻿// Project: NeuralRig
-// Copyright (c) 2026 rafae
+﻿// Project: NeuraRig
+// Copyright (c) 2026 Rafael Valoto
 // All rights reserved.
-//
-// Created by rafae on 2/15/2026.
-//
 
 #include "NRNetwork/NRNetwork.h"
 #include "NRCore/NRTypes.h"
