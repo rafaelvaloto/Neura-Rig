@@ -6,6 +6,7 @@
 //
 
 #include "NRNetwork/NRNetwork.h"
+#include "NRCore/NRTypes.h"
 #include <iostream>
 
 namespace NR
@@ -48,7 +49,7 @@ namespace NR
 
 	int NRNetwork::Receive(std::vector<float>& outBuffer)
 	{
-		char buffer[4096];
+		char buffer[8192];
 		sockaddr_in clientAddr;
 		int clientSize = sizeof(clientAddr);
 
@@ -56,25 +57,8 @@ namespace NR
 
 		if (bytesReceived > 0)
 		{
-			// Converte os bytes recebidos para o nosso array de floats (vetores 3D)
 			int numFloats = bytesReceived / sizeof(float);
 			outBuffer.assign((float*)buffer, (float*)buffer + numFloats);
-		}
-		return bytesReceived;
-	}
-
-	int NRNetwork::Receive(std::vector<char>& outBuffer)
-	{
-		char buffer[4096];
-		sockaddr_in clientAddr;
-		int clientSize = sizeof(clientAddr);
-
-		int bytesReceived = recvfrom(serverSocket, buffer, sizeof(buffer), 0, (sockaddr*)&clientAddr, &clientSize);
-
-		if (bytesReceived > 0)
-		{
-			// Copia os bytes brutos, 1 para 1
-			outBuffer.assign(buffer, buffer + bytesReceived);
 		}
 		return bytesReceived;
 	}

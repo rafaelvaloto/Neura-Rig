@@ -16,23 +16,18 @@ int main()
 		std::cout << "Success socket NeuralRig port: " << port << std::endl;
 		std::cout << "Waiting for messages..." << std::endl;
 		std::vector<float> data;
-
 		while (true)
 		{
 			int bytes = Network.Receive(data);
 			if (bytes > 0)
 			{
-				if (bytes == 24)
-				{
-					double receivedVector[3];
-					std::memcpy(receivedVector, data.data(), 24);
+				int idx = sizeof(float) * 3;
+				float X = data[idx];
+				float Y = data[idx + 1];
+				float Z = data[idx + 2];
 
-					double X = receivedVector[0];
-					double Y = receivedVector[1];
-					double Z = receivedVector[2];
-
-					std::cout << "Message Content -> X: " << X << " Y: " << Y << " Z: " << Z << std::endl;
-				}
+				std::cout << "Bone[] -> X: " << X << " Y: " << Y << " Z: " << Z << std::endl;
+				std::cout << "------------------------------" << std::endl;
 			}
 			else if (bytes < 0)
 			{
