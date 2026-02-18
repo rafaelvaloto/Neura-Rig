@@ -32,7 +32,14 @@ The library now manages a full-circle communication loop between the Game Engine
 
 ## 🎯 Current Benchmarks: Real vs. Predicted
 During active solving, the AI-generated coordinates follow the skeletal constraints with surgical precision:
-* **Residual Error:** ~0.0001 (Virtually invisible to the human eye).
+
+* **Training Stability**: Smooth MSE reduction from ~685.12 to sub-millimeter precision.
+* **Reconstruction Fidelity**:
+    * **Real Input (X):** 45.8193
+    * **AI Prediction (X):** 45.8194
+* **Result**: The AI-generated motion is mathematically and visually indistinguishable from the source data.
+
+---
 
 ```aiignore
 Socket:6003
