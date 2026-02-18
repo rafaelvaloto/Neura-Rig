@@ -8,10 +8,48 @@
 #include <string>
 #include <vector>
 
+#include "NRTrainee/NRTrainee.h"
+
+
+class NRMLPModel : public NR::INRModel<float>
+{
+	torch::nn::Sequential Network;
+
+public:
+	NRMLPModel(int64_t InputSize, int64_t HiddenSize, int64_t OutputSize)
+	{
+		Network = torch::nn::Sequential(
+			torch::nn::Linear(InputSize, HiddenSize),
+			torch::nn::ReLU(),
+			torch::nn::Linear(HiddenSize, HiddenSize),
+			torch::nn::ReLU(),
+			torch::nn::Linear(HiddenSize, OutputSize));
+		register_module("Network", Network);
+	}
+
+	torch::Tensor Forward(torch::Tensor Input) override
+	{
+		return Network->forward(Input);
+	}
+
+	void SaveModel(const std::string& FilePath) override
+	{
+		torch::save(Network, FilePath);
+	}
+
+	void LoadModel(const std::string& FilePath) override
+	{
+		torch::load(Network, FilePath);
+	}
+};
+
+
 int main()
 {
 	using namespace NR;
 	NRRigDescription rigDesc;
+	std::shared_ptr<NRTrainee<float>> trainee = nullptr;
+
 	NRNetwork Network;
 	int port = 6003;
 	if (Network.StartServer(port))
@@ -39,6 +77,15 @@ int main()
 						{
 							std::cout << "Rig configuration updated!" << std::endl;
 							std::cout << "------------------------------" << std::endl;
+
+							auto model = std::make_shared<NRMLPModel>(
+								rigDesc.GetRequiredInputSize(),
+								64,
+								rigDesc.GetRequiredInputSize()
+							);
+							trainee = std::make_shared<NRTrainee<float>>(model, rigDesc, 0.001);
+							std::cout << "Model trainee configuration!" << std::endl;
+							std::cout << "------------------------------" << std::endl;
 						}
 					}
 					else
@@ -50,18 +97,30 @@ int main()
 				{
 					std::cout << "---------- HEADER (0x02) ---------" << std::endl;
 					std::vector<float> data;
+					std::vector<NRVector3D> inputBuffer;
 					data.reserve(bytes / sizeof(float));
 
 					Network.GetData(data);
-					for (int i = 0; i < bytes / sizeof(float); i += 3)
-					{
-						auto bone = i > 0 ? i / 3 : 0;
-						float X = data[i];
-						float Y = data[i + 1];
-						float Z = data[i + 2];
-						std::cout << "Bone[" << rigDesc.BoneMap[bone] << "] -> X: " << X << " Y: " << Y << " Z: " << Z << std::endl;
+					float* rawFloats = &data[0];
+					int numVectors = bytes / sizeof(NRVector3D);
+					for (int i = 0; i < numVectors; i++) {
+						auto bone = i*3 > 0 ? i : 0;
+						inputBuffer.push_back({rawFloats[i*3], rawFloats[i*3+1], rawFloats[i*3+2]});
+						std::cout << "Bone[" << rigDesc.BoneMap[bone] << "] -> X: " << rawFloats[i*3] << " Y: " << rawFloats[i*3+1] << " Z: " << rawFloats[i*3+2] << std::endl;
 					}
-					std::cout << "------------------------------" << std::endl;
+
+					float loss = trainee->TrainStep(inputBuffer, inputBuffer);
+
+					static int frameCounter = 0;
+					if (frameCounter++ % 30 == 0) { // Mostra a cada 30 frames
+						std::cout << "[TRAIN] Frame: " << frameCounter << " | Loss: " << loss << std::endl;
+					}
+
+					if (loss < 0.001) { // Um threshold mais realista para "perfeito"
+						std::cout << "!!! Model Converged !!! Loss: " << loss << std::endl;
+						trainee->SaveWeights("rig_model.pt");
+					}
+					std::cout << "----------------------------------" << std::endl;
 				}
 			}
 			else
