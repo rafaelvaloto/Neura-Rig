@@ -67,7 +67,6 @@ namespace NR
 
 	int NRNetwork::Receive()
 	{
-		sockaddr_in clientAddr;
 		int clientSize = sizeof(clientAddr);
 		int bytesReceived = recvfrom(serverSocket, inBuffer, sizeof(inBuffer), 0, (sockaddr*)&clientAddr, &clientSize);
 
@@ -79,6 +78,12 @@ namespace NR
 			payloadSize = bytesReceived - 1;
 		}
 		return payloadSize;
+	}
+
+	void NRNetwork::Send(const uint8_t* data, int size)
+	{
+		int clientSize = sizeof(clientAddr);
+		sendto(serverSocket, (const char*)data, size, 0, (struct sockaddr*)&clientAddr, clientSize);
 	}
 
 	void NRNetwork::Stop()

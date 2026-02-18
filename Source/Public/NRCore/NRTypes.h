@@ -40,19 +40,19 @@ namespace NR
 		}
 
 		// O número de ossos capturados é o tamanho do mapa
-		[[nodiscard]] int64_t GetBonesCount() const
+		int64_t GetBonesCount() const
 		{
 			return static_cast<int64_t>(BoneMap.size());
 		}
 
 		// Input: Baseado nos ossos que recebemos via rede (X, Y, Z para cada um)
-		[[nodiscard]] int64_t GetRequiredInputSize() const
+		int64_t GetRequiredInputSize() const
 		{
 			return GetBonesCount() * 3;
 		}
 
 		// Output: O que o modelo deve cuspir (geralmente definido pelo modelo carregado)
-		[[nodiscard]] int64_t GetRequiredOutputSize() const
+		int64_t GetRequiredOutputSize() const
 		{
 			return TargetCount * 3;
 		}

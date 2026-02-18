@@ -22,8 +22,8 @@ namespace NR
 		 * @param Description Configuration for the rig to be solved.
 		 * @param DeviceTarget The target device (CPU or CUDA) where tensor computations will be executed. Defaults to CPU.
 		 */
-		explicit NRSolver(std::unique_ptr<INRModel<float>> ModelNetwork, const NRRigDescription& Description, const torch::Device DeviceTarget = torch::kCPU)
-		    : NeuralNetwork(std::move(ModelNetwork))
+		explicit NRSolver(std::shared_ptr<INRModel<float>> ModelNetwork, const NRRigDescription& Description, const torch::Device DeviceTarget = torch::kCPU)
+		    : NeuralNetwork(ModelNetwork)
 		    , RigDesc(Description)
 		    , Device(DeviceTarget)
 		{
@@ -42,7 +42,7 @@ namespace NR
 		/**
 		 * @brief Unique pointer to the neural network model used for solving.
 		 */
-		std::unique_ptr<INRModel<float>> NeuralNetwork;
+		std::shared_ptr<INRModel<float>> NeuralNetwork;
 
 		/**
 		 * @brief Device where tensor computations will be executed (CPU or CUDA).

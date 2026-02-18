@@ -51,6 +51,8 @@ namespace NR
 		 */
 		int Receive();
 
+		void Send(const uint8_t* data, int size);
+
 		/**
 		 * @brief Extracts typed data from the received payload buffer.
 		 *
@@ -116,6 +118,8 @@ namespace NR
 		 * for the bound socket endpoint.
 		 */
 		sockaddr_in serverAddr;
+
+		sockaddr_in clientAddr;
 
 		/**
 		 * @brief Indicates whether the server is currently active.
