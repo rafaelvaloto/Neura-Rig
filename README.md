@@ -2,28 +2,25 @@
 
 **NeuraRig** is a C++20 library for **Neural Inverse Kinematics (IK)** and procedural character animation.
 
-Unlike traditional Control Rigs that require complex manual math and rule scripting for every limb, NeuraRig uses **Deep Learning** to solve character poses. It learns natural movement patterns from data and applies them in real-time using **LibTorch**.
-
-> [!WARNING]
-> **ARCHITECTURAL SKELETON / PRE-ALPHA**
-> This project is currently in the initial setup phase. The repository contains the project structure, build system, and LibTorch integration. **There is no usable animation solver yet.**
+Unlike traditional Control Rigs that require complex manual math, NeuraRig uses **Deep Learning** to solve character poses. It learns natural movement patterns from data and applies them in real-time using **LibTorch**.
 
 ---
 
-## 🚀 Stage 2: Real-Time Data Acquisition (Active)
+## 🚀 Stage 2: Real-Time Data Acquisition & Dynamic Mapping (Active)
 
-The foundation is now bridging the gap between game engines and neural training. We have moved from static mock data to a functional live-stream from **Unreal Engine 5**.
+The foundation now bridges Game Engines and Neural Training with a **Dynamic Skeleton Protocol**. We no longer rely on hardcoded bone counts; the rig "explains" itself to the AI.
 
-### 📡 Live Link Integration (UE5)
-We've implemented a high-performance UDP Socket layer that streams skeletal data directly from the mesh. This ensures the AI learns from the final animated pose, including physics and secondary motions.
+### 📡 Smart Data Streaming
+We've implemented a dual-protocol UDP layer that handles both configuration and motion:
 
-* **Deterministic Data Streaming:** Optimized UDP packets with **exactly 12 bytes per bone** (3 x 32-bit floats).
-* **High-Frequency Capture:** Zero-latency buffer handling capable of 60fps+ synchronization.
-* **Global Space Context:** Capturing world-space transforms to provide absolute spatial awareness for the model.
+* **Dynamic Bone Mapping (0x01):** A handshake protocol where the Engine (UE5) sends the Rig hierarchy (ID + Name) via serialized ANSI strings. NeuraRig builds a `BoneMap` on-the-fly.
+* **High-Speed Motion Stream (0x02):** Optimized 12-byte blocks (X, Y, Z floats) per bone. Zero-copy memory mapping directly into PyTorch Tensors.
+
+### 🛠️ Key Architecture Updates
+* **NRRigDescription:** Now features an `unordered_map` for O(1) bone lookups and automatic `InputSize` calculation.
 
 ### 📽️ Progress Preview: Bone Tracking
-The following demonstration shows the **NeuraRig Data Bridge** capturing the `foot_r` trajectory in real-time. Notice the seamless data flow between the Unreal Engine viewport and the NeuraRig C++ Server.
-
+*(Console output shows the new Auto-Mapping: `Mapped Bone: 0 -> foot_r, 1 -> foot_l` followed by real-time coordinates)*
 <p align="center">
   <img src="GIFProgress.gif" alt="NeuraRig Bone Tracking" width="800">
 </p>
@@ -31,24 +28,9 @@ The following demonstration shows the **NeuraRig Data Bridge** capturing the `fo
 
 ---
 
-## 🛠️ Key Architecture
+## 🎯 Current Status: Integration Success
+1. **Memory Alignment:** 1-to-1 mapping of UDP buffers to LibTorch tensors confirmed.
+2. **Optimizer Stability:** MSE reduction confirmed; the "brain" is officially learning.
+3. **Dynamic Scaling:** The server now adapts to any number of bones without recompilation.
 
-* **Abstraction Layer:** `INRModel` interface for seamless swapping between neural architectures.
-* **Training Engine:** `NRTrainee` capable of high-speed 3D vector regression.
-* **Type Safety:** C++20 Concepts to enforce floating-point precision.
-* **Data Bridge:** Direct memory mapping between `std::vector<float>` and `torch::Tensor`.
-
-### Validation Test Results
-1. **Memory Alignment:** Successful 1-to-1 mapping of UDP buffers to LibTorch tensors.
-2. **Optimizer Stability:** Confirmed MSE (Mean Squared Error) reduction during initial training cycles.
-3. **Connectivity:** Stable socket communication with fixed-stride (12-byte) bone data.
-
-## 🎯 Why NeuraRig?
-* **Constant Runtime Cost:** Replaces complex blend trees and raycasts with a single neural inference step.
-* **Logic Simplification:** Eliminates thousands of lines of `if/else` animation logic.
-* **Data-Driven Naturalism:** Character poses are learned from motion data, not hand-coded rules.
-
----
-
-
-**Next Step:** Implementation of `NRSolver` for real-time procedural IK resolution and multi-limb synchronization.
+**Next Step:** Implementation of the **NRSolver** for real-time inference and **Data Buffering** to store long-term motion sequences for complex training.
