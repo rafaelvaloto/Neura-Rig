@@ -7,6 +7,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
+// Definições de cores ANSI
+#define RESET   "\033[0m"
+#define GREEN   "\033[32m"      /* Verde para Convergência */
+#define YELLOW  "\033[33m"      /* Amarelo para Logs de Treino */
+#define RED     "\033[31m"      /* Vermelho para Loss Alta */
+#define CYAN    "\033[36m"      /* Ciano para Headers */
 
 #include "NRTrainee/NRTrainee.h"
 
@@ -109,16 +115,25 @@ int main()
 						std::cout << "Bone[" << rigDesc.BoneMap[bone] << "] -> X: " << rawFloats[i*3] << " Y: " << rawFloats[i*3+1] << " Z: " << rawFloats[i*3+2] << std::endl;
 					}
 
-					float loss = trainee->TrainStep(inputBuffer, inputBuffer);
+					std::vector<NRVector3D> inputFrame = { inputBuffer[0], inputBuffer[1] };
+					std::vector<NRVector3D> targetFrame = { inputBuffer[2], inputBuffer[3] };
+					float loss = trainee->TrainStep(inputFrame, targetFrame);
 
 					static int frameCounter = 0;
-					if (frameCounter++ % 30 == 0) { // Mostra a cada 30 frames
-						std::cout << "[TRAIN] Frame: " << frameCounter << " | Loss: " << loss << std::endl;
+					if (frameCounter++ % 30 == 0) {
+						// Usamos Amarelo para o log comum de treino
+						std::cout << YELLOW << "[TRAIN]" << RESET
+								  << " Frame: " << CYAN << frameCounter << RESET
+								  << " | Loss: " << (loss > 0.1 ? RED : GREEN) << loss << RESET << std::endl;
 					}
 
-					if (loss < 0.001) { // Um threshold mais realista para "perfeito"
-						std::cout << "!!! Model Converged !!! Loss: " << loss << std::endl;
+					if (loss < 0.001) {
+						// Verde brilhante para quando o modelo atinge a perfeição
+						std::cout << GREEN << "!!! Model Converged !!!" << RESET
+								  << " Loss: " << GREEN << loss << RESET << std::endl;
+
 						trainee->SaveWeights("rig_model.pt");
+						std::cout << CYAN << "-> Weights saved: " << RESET << "rig_model.pt" << std::endl;
 					}
 					std::cout << "----------------------------------" << std::endl;
 				}
