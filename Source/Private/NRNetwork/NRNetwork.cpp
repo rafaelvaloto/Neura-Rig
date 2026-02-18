@@ -13,7 +13,7 @@ namespace NR
 	    , bIsRunning(false)
 	{
 		WSADATA wsaData;
-		WSAStartup(MAKEWORD(2, 2), &wsaData); // Inicia o Windows Sockets
+		WSAStartup(MAKEWORD(2, 2), &wsaData); // Initialize Windows Sockets
 	}
 
 	NRNetwork::~NRNetwork()
@@ -31,7 +31,7 @@ namespace NR
 		}
 
 		serverAddr.sin_family = AF_INET;
-		serverAddr.sin_addr.s_addr = INADDR_ANY; // Escuta em todas as interfaces (localhost)
+		serverAddr.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces (localhost)
 		serverAddr.sin_port = htons(port);
 
 		if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
@@ -44,20 +44,41 @@ namespace NR
 		return true;
 	}
 
-	int NRNetwork::Receive(std::vector<float>& outBuffer)
+	template<typename T>
+	void NRNetwork::GetData(std::vector<T>& OutBuffer)
 	{
-		char buffer[8192];
+		if (std::is_same_v<T, float> && payloadSize > 0)
+		{
+			int count = payloadSize / sizeof(float);
+			auto data = reinterpret_cast<float*>(&inBuffer[1]);
+			OutBuffer.assign(data, data + count);
+		}
+		else if (std::is_same_v<T, uint8_t> && payloadSize > 0)
+		{
+			auto data = reinterpret_cast<uint8_t*>(&inBuffer[1]);
+			OutBuffer.assign(data, data + payloadSize);
+		}
+	}
+
+	uint8_t NRNetwork::GetHeader()
+	{
+		return header;
+	}
+
+	int NRNetwork::Receive()
+	{
 		sockaddr_in clientAddr;
 		int clientSize = sizeof(clientAddr);
+		int bytesReceived = recvfrom(serverSocket, inBuffer, sizeof(inBuffer), 0, (sockaddr*)&clientAddr, &clientSize);
 
-		int bytesReceived = recvfrom(serverSocket, buffer, sizeof(buffer), 0, (sockaddr*)&clientAddr, &clientSize);
-
-		if (bytesReceived > 0)
+		header = 0;
+		payloadSize = 0;
+		if (bytesReceived > 1)
 		{
-			int numFloats = bytesReceived / sizeof(float);
-			outBuffer.assign((float*)buffer, (float*)buffer + numFloats);
+			header = inBuffer[0];
+			payloadSize = bytesReceived - 1;
 		}
-		return bytesReceived;
+		return payloadSize;
 	}
 
 	void NRNetwork::Stop()
@@ -69,4 +90,7 @@ namespace NR
 		}
 		bIsRunning = false;
 	}
+
+	template void NRNetwork::GetData<float>(std::vector<float>&);
+	template void NRNetwork::GetData<uint8_t>(std::vector<uint8_t>&);
 } // namespace NR

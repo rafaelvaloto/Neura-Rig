@@ -13,8 +13,8 @@ namespace NR
 		torch::NoGradGuard NoGrad;
 		torch::Tensor OutputTensor = NeuralNetwork->Forward(InputTensor).to(torch::kCPU);
 
-		std::vector<NRVector3D> Results(RigDesc.BoneCount);
-		std::memcpy(Results.data(), OutputTensor.data_ptr<float>(), OutputTensor.nbytes());
-		return Results;
+		// std::vector<NRVector3D> Results(RigDesc.BoneCount);
+		// std::memcpy(Results.data(), OutputTensor.data_ptr<float>(), OutputTensor.nbytes());
+		return std::vector<NRVector3D>();
 	}
 } // namespace NR

@@ -1,12 +1,12 @@
-﻿# 1. Encontrar os arquivos fonte
+﻿# 1. Find source files
 set(TRAINEE_SOURCES "Integration/Trainee.cpp")
 set(SERVER_SOURCES "Integration/Server.cpp")
 
-# 2. Criar os executáveis
+# 2. Create executables
 add_executable(SimpleTrainer ${TRAINEE_SOURCES})
 add_executable(NRServer ${SERVER_SOURCES})
 
-# 3. Configurar opções de compilação
+# 3. Configure compilation options
 foreach(TARGET_NAME SimpleTrainer NRServer)
     if (MSVC)
         # Opções gerais

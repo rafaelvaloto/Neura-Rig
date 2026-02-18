@@ -42,14 +42,35 @@ namespace NR
 		bool StartServer(int port = 6003);
 
 		/**
-		 * @brief Receives a buffer of floating-point data from the network.
+		 * @brief Receives a packet from the network and stores it in the internal buffer.
 		 *
-		 * Blocks until data is available or an error occurs.
+		 * Non-blocking operation that attempts to read available data from the socket.
+		 * Updates internal header and payloadSize members upon successful reception.
 		 *
-		 * @param outBuffer Output vector to store received float values.
-		 * @return Number of bytes received, or -1 on error.
+		 * @return Number of bytes received, or negative value on error.
 		 */
-		int Receive(std::vector<float>& outBuffer);
+		int Receive();
+
+		/**
+		 * @brief Extracts typed data from the received payload buffer.
+		 *
+		 * Copies and converts the internal buffer data into the specified type vector.
+		 * Must be called after a successful Receive() operation.
+		 *
+		 * @tparam T The target data type (typically float for bone transforms).
+		 * @param OutBuffer Output vector to populate with parsed data.
+		 */
+		template<typename T>
+		void GetData(std::vector<T>& OutBuffer);
+
+		/**
+		 * @brief Returns the header byte from the last received packet.
+		 *
+		 * Used to identify packet type or protocol version before processing payload.
+		 *
+		 * @return The 8-bit header value from the most recent Receive() call.
+		 */
+		uint8_t GetHeader();
 
 		/**
 		 * @brief Stops the server and closes the socket connection.
@@ -59,6 +80,28 @@ namespace NR
 		void Stop();
 
 	private:
+		/**
+		 * @brief Internal buffer for receiving network data.
+		 *
+		 * Stores up to 32KB of incoming UDP/TCP packet data before parsing
+		 * into structured format. Size must accommodate maximum expected payload.
+		 */
+		char inBuffer[32768] = {};
+
+		/**
+		 * @brief Packet header identifying the data type or protocol version.
+		 *
+		 * First byte of received packets, used to validate and route incoming data.
+		 */
+		uint8_t header;
+
+		/**
+		 * @brief Size in bytes of the actual payload data.
+		 *
+		 * Excludes header bytes, represents the length of valid data in inBuffer.
+		 */
+		int payloadSize;
+
 		/**
 		 * @brief Socket handle for the server connection.
 		 *
@@ -81,4 +124,5 @@ namespace NR
 		 */
 		bool bIsRunning;
 	};
+
 } // namespace NR

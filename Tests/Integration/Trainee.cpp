@@ -6,7 +6,6 @@
 #include "NRTrainee/NRTrainee.h"
 #include <iostream>
 
-// Implementação simples de INRModel para teste
 class NRMLPModel : public NR::INRModel<float>
 {
 	torch::nn::Sequential Network;
@@ -45,21 +44,38 @@ int main()
 
 	std::cout << "=== QUICK TRAINING (TRAINEE TEST) ===" << std::endl;
 
-	NR::NRRigDescription MyBotRig = {3, 1};
+	NR::NRRigDescription MyBotRig;
+	MyBotRig.TargetCount = 3;
 
+	MyBotRig.AddBone(0, "Bone1");
+	MyBotRig.AddBone(1, "Bone2");
+	MyBotRig.AddBone(2, "Bone3");
+
+
+	std::cout << "Creating model..." << std::endl;
 	// Inject new model in NRTrainee
 	auto model = std::make_shared<NRMLPModel>(
 	    MyBotRig.GetRequiredInputSize(),
 	    64,
 	    MyBotRig.GetRequiredOutputSize());
-	NR::NRTrainee<float> trainee(model, MyBotRig, 0.1);
+	std::cout << "Model created. InputSize: " << MyBotRig.GetRequiredInputSize() << " OutputSize: " << MyBotRig.GetRequiredOutputSize() << std::endl;
+
+	std::cout << "Creating trainee..." << std::endl;
+	NR::NRTrainee<float> trainee(model, MyBotRig, 0.01);
+	std::cout << "Trainee created." << std::endl;
 
 	std::cout << "=== model ===" << std::endl;
-	// 2 amostras de treino
+	// 2 amostras de treino. Cada amostra precisa de InputSize = TargetCount * 3 floats.
+	// Como TargetCount = 3, cada amostra precisa de 3 NRVector3D.
 	std::vector<NR::NRVector3D> inputs = {
-	    {0.0f, 0.0f, 0.0f}, // Alvo amostra 1
-	    {1.0f, 1.0f, 1.0f}  // Alvo amostra 2
-	};
+	    // Amostra 1 (3 vetores de entrada)
+	    {0.0f, 0.0f, 0.0f},
+	    {0.0f, 0.0f, 0.0f},
+	    {0.0f, 0.0f, 0.0f},
+	    // Amostra 2 (3 vetores de entrada)
+	    {1.0f, 1.0f, 1.0f},
+	    {1.0f, 1.0f, 1.0f},
+	    {1.0f, 1.0f, 1.0f}};
 
 	std::cout << "=== inputs ===" << std::endl;
 	// Para cada entrada, precisamos de 3 saídas (uma para cada osso)
