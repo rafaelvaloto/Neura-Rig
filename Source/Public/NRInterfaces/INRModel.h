@@ -19,9 +19,7 @@ namespace NR
 	class INRModel : public torch::nn::Module
 	{
 	public:
-		~INRModel() override
-		{
-		}
+		~INRModel() override = default;
 
 		/**
 		 * @brief Represents a forward operation or entity for processing or calculations.

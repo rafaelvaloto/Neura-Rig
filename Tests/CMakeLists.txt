@@ -21,7 +21,7 @@ foreach(TARGET_NAME SimpleTrainer NRServer)
     # 4. Linkar bibliotecas
     target_link_libraries(${TARGET_NAME} PRIVATE NeuralRig ${TORCH_LIBRARIES})
 
-    # 5. Copiar DLLs no Windows (Pós-build)
+    # 5. Copiar DLLs e Datasets no Windows (Pós-build)
     if(MSVC)
         file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
@@ -30,6 +30,14 @@ foreach(TARGET_NAME SimpleTrainer NRServer)
                 $<TARGET_FILE_DIR:${TARGET_NAME}>
                 COMMENT "Copiando DLLs do Torch para ${TARGET_NAME}..."
                 COMMAND_EXPAND_LISTS
+        )
+
+        # Copiar pasta Datasets para o diretório do executável
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/Datasets"
+                "$<TARGET_FILE_DIR:${TARGET_NAME}>/Datasets"
+                COMMENT "Copiando Datasets para o diretorio do ${TARGET_NAME}..."
         )
     endif()
 endforeach()

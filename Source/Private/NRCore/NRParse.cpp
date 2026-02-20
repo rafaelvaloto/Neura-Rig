@@ -3,51 +3,77 @@
 // All rights reserved.
 
 #include "NRCore/NRParse.h"
+#include <fstream>
+#include <iostream>
+
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4267)
+#pragma warning(disable : 4996)
+#pragma warning(disable : 4702)
+#pragma warning(disable : 4100)
+#include <nlohmann/json.hpp>
+#pragma warning(pop)
+
+using json = nlohmann::json;
 
 namespace NR
 {
-
-	bool NRParse::ConfigureSkeletonRig(NRRigDescription& rig, uint8_t* data, int size)
+	bool NRParse::LoadProfileFromJson(const std::string& FilePath, NRModelProfile& OutProfile)
 	{
-		if (size <= 0)
+		std::ifstream file(FilePath);
+		if (!file.is_open())
 		{
+			std::cerr << "[NeuraRig] Erro: Nao foi possivel abrir o arquivo: " << FilePath << std::endl;
 			return false;
 		}
 
-		int offset = 0;
-		rig.BoneMap.clear();
-
-		// While there is data to read in the buffer
-		while (offset + sizeof(int) * 2 <= size)
+		try
 		{
-			// 1. Read Index (4 bytes)
-			int32_t boneIndex;
-			memcpy(&boneIndex, &data[offset], sizeof(int32_t));
-			offset += sizeof(int32_t);
+			// Faz o parse do ficheiro para um objecto JSON
+			json j;
+			file >> j;
 
-			// 2. Read Name Length (4 bytes)
-			int32_t nameLen;
-			memcpy(&nameLen, &data[offset], sizeof(int32_t));
-			offset += sizeof(int32_t);
+			// Extrai o nome do profile
+			OutProfile.ProfileName = j.value("Profile", "Unknown_Profile");
 
-			// Safety: Check if name length makes sense
-			if (offset + nameLen > size || nameLen <= 0 || nameLen > 256)
+			if (j.contains("Schema"))
 			{
-				std::cout << "Invalid bone name length: " << nameLen << std::endl;
-				break;
+				auto schema = j["Schema"];
+
+				// Popula Variables (se existirem)
+				if (schema.contains("Variables"))
+				{
+					for (const auto& item : schema["Variables"])
+					{
+						NRDataBlock block;
+						block.Name = item.value("Name", "Unknown_Var");
+						block.FloatCount = item.value("Size", 1);
+						block.bIsTarget = item.value("IsTarget", false);
+						OutProfile.Variables.push_back(block);
+					}
+				}
+
+				// Popula Bones (se existirem)
+				if (schema.contains("Bones"))
+				{
+					for (const auto& item : schema["Bones"])
+					{
+						NRDataBlock block;
+						block.Name = item.value("Name", "Unknown_Bone");
+						block.FloatCount = item.value("Size", 3);
+						block.bIsTarget = item.value("IsTarget", false);
+						OutProfile.Bones.push_back(block);
+					}
+				}
 			}
-
-			// 3. Read Name (ANSI chars)
-			std::string boneName(reinterpret_cast<char*>(&data[offset]), nameLen);
-			offset += nameLen;
-
-			// 4. Add to Rig
-			rig.AddBone(boneIndex, boneName);
-			std::cout << "Mapped Bone: " << boneIndex << " -> " << boneName << std::endl;
+			return true;
 		}
-
-		rig.TargetCount = rig.BoneMap.size();
-		return true;
+		catch (const json::exception& e)
+		{
+			std::cerr << "[NeuraRig] Erro de formatacao no JSON: " << e.what() << std::endl;
+			return false;
+		}
 	}
 
 } // namespace NR

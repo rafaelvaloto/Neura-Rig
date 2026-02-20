@@ -4,7 +4,6 @@
 #pragma once
 #include <concepts>
 #include <type_traits>
-#include <vector>
 
 namespace NR
 {

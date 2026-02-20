@@ -4,19 +4,15 @@
 
 #include "NRCore/NRParse.h"
 #include "NRNetwork/NRNetwork.h"
+#include "NRSolver/NRSolver.h"
+#include "NRTrainee/NRTrainee.h"
 #include <iostream>
 #include <string>
 #include <vector>
-// Definições de cores ANSI
-#define RESET   "\033[0m"
-#define GREEN   "\033[32m"      /* Verde para Convergência */
-#define YELLOW  "\033[33m"      /* Amarelo para Logs de Treino */
-#define RED     "\033[31m"      /* Vermelho para Loss Alta */
-#define CYAN    "\033[36m"      /* Ciano para Headers */
-
-#include "NRSolver/NRSolver.h"
-#include "NRTrainee/NRTrainee.h"
-
+#include <filesystem>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 class NRMLPModel : public NR::INRModel<float>
 {
@@ -55,19 +51,46 @@ bool saveModel = false;
 int main()
 {
 	using namespace NR;
-	NRRigDescription rigDesc;
-	rigDesc.TargetCount = 2;
-	std::shared_ptr<NRTrainee<float>> trainee = nullptr;
+	NRModelProfile activeProfile;
+
 	std::shared_ptr<NRSolver> solver = nullptr;
 	std::shared_ptr<NRMLPModel> model = nullptr;
+	std::shared_ptr<NRTrainee<float>> trainee = nullptr;
+
+	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
+	if (!std::filesystem::exists(DataAssetPath))
+	{
+		DataAssetPath = "../Tests/Datasets/Foot_IK.json"; // Fallback for some build configurations
+	}
+
+	if (!NRParse::LoadProfileFromJson(DataAssetPath, activeProfile))
+	{
+		std::cerr << "Failed to load data asset: " << DataAssetPath << std::endl;
+		return 1;
+	}
+
+	std::cout << "----------------------------------" << std::endl;
+	std::cout << "Profile loaded: " << activeProfile.ProfileName << std::endl;
+	std::cout << " -> Input Size: " << activeProfile.GetRequiredInputSize() << std::endl;
+	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
+
+	model = std::make_shared<NRMLPModel>(
+			activeProfile.GetRequiredInputSize(),
+			64,
+			activeProfile.GetRequiredOutputSize());
+
+	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 0.0001);
+	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
 	int port = 6003;
 	if (Network.StartServer(port))
 	{
+		std::cout << "----------------------------------" << std::endl;
+		std::cout << "Server Started!" << std::endl;
 		std::cout << "Success socket NeuralRig port: " << port << std::endl;
+		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Waiting for messages..." << std::endl;
-		std::cout << "------------------------------" << std::endl;
 		static int frameCounter = 0;
 		while (true)
 		{
@@ -75,118 +98,107 @@ int main()
 			if (bytes > 0)
 			{
 				uint8_t header = Network.GetHeader();
-				if (header == 1)
+				if (header == 2)
 				{
-					std::vector<uint8_t> bones;
-					bones.reserve(bytes);
-
-					Network.GetData(bones);
-					if (bones.size() > 0)
-					{
-						std::cout << "Data received: " << bones.size() << " bytes" << std::endl;
-						if (NRParse::ConfigureSkeletonRig(rigDesc, bones.data(), bytes))
-						{
-							std::cout << "Rig configuration updated!" << std::endl;
-							std::cout << "------------------------------" << std::endl;
-
-							model = std::make_shared<NRMLPModel>(
-								rigDesc.GetRequiredInputSize(),
-								64,
-								rigDesc.GetRequiredOutputSize()
-							);
-							trainee = std::make_shared<NRTrainee<float>>(model, rigDesc, 0.0001);
-							std::cout << "Model trainee configuration!" << std::endl;
-							std::cout << "------------------------------" << std::endl;
-						}
-					}
-					else
-					{
-						std::cout << "No data received!" << std::endl;
-					}
-				}
-				else if (header == 2)
-				{
-					// std::cout << "---------- HEADER (0x02) ---------" << std::endl;
 					std::vector<float> data;
-					std::vector<NRVector3D> inputBuffer;
-					data.reserve(bytes / sizeof(float));
-
 					Network.GetData(data);
-					float* rawFloats = &data[0];
-					int numVectors = bytes / sizeof(NRVector3D);
-					for (int i = 0; i < numVectors; i++) {
-						inputBuffer.push_back({rawFloats[i*3], rawFloats[i*3+1], rawFloats[i*3+2]});
-						// std::string color = (i < 2) ? YELLOW : CYAN;
-						// std::cout << color << "Bone[" << rigDesc.BoneMap[i] << "]" << RESET
-						// 		  << " -> X: " << rawFloats[i*3] << " Y: " << rawFloats[i*3+1] << " Z: " << rawFloats[i*3+2] << std::endl;
-					}
 
-					float loss = trainee->TrainStep({ inputBuffer[0], inputBuffer[1] }, { inputBuffer[2], inputBuffer[3] });
-					if (frameCounter++ % 30 == 0) {
-						std::cout << "----------------------------------" << std::endl;
-						std::cout << " Loss: " << loss << std::endl;
-						std::cout << " frame counter:" << frameCounter << std::endl;
-						std::cout << "----------------------------------" << std::endl;
-					}
+					auto totalFloats = data.size();
+					int32_t inputSize = activeProfile.GetRequiredInputSize();
+					int32_t outputSize = activeProfile.GetRequiredOutputSize();
+					int32_t profileTotal = inputSize + outputSize;
 
-					if (loss < 0.001 && !saveModel) {
-						saveModel = true;
-						std::cout << "----------------------------------" << std::endl;
-						// Verde brilhante para quando o modelo atinge a perfeição
-						std::cout << "!!! Model Converged !!!" << std::endl;
-						std::cout << " Loss: " << loss << std::endl;
-
-						trainee->SaveWeights("rig_model.pt");
-						std::cout << "-> Weights saved: " << "rig_model.pt" << std::endl;
-						std::cout << "----------------------------------" << std::endl;
-					}
-
-					if (loss < 0.0001) { // Quando atingir a precisão desejada
-						if (!solver) {
-							std::cout << CYAN << "\n=== SWITCHING TO SOLVER MODE ===" << RESET << std::endl;
-
-							// Em vez de LoadModel (que pode falhar se o arquivo estiver ocupado),
-							// usamos o modelo que já está na memória e pronto.
-							solver = std::make_shared<NRSolver>(model, rigDesc);
-
-							std::cout << GREEN << "Solver Created Successfully!" << RESET << std::endl;
+					if (totalFloats >= profileTotal && trainee)
+					{
+						std::vector<NRVector3D> inputBuffer;
+						inputBuffer.reserve(inputSize / 3);
+						for (int i = 0; i < inputSize; i += 3)
+						{
+							inputBuffer.push_back({data[i], data[i + 1], data[i + 2]});
 						}
 
-						if (solver) {
-							// Realizamos a predição
-							std::vector<NRVector3D> frame = { inputBuffer[0], inputBuffer[1] };
-							std::vector<NRVector3D> predicted = solver->Solve(frame);
+						std::vector<NRVector3D> targetBuffer;
+						targetBuffer.reserve(outputSize / 3);
+						for (int i = inputSize; i < profileTotal; i += 3)
+						{
+							targetBuffer.push_back({data[i], data[i + 1], data[i + 2]});
+						}
 
-							std::vector<uint8_t> sendBuffer;
-							sendBuffer.push_back(0x03);
-							float rawOutput[6] = {
-								predicted[0].x, predicted[0].y, predicted[0].z,
-								predicted[1].x, predicted[1].y, predicted[1].z
-							};
+						float loss = trainee->TrainStep(inputBuffer, targetBuffer);
+						if (frameCounter++ % 30 == 0)
+						{
+							std::cout << "----------------------------------" << std::endl;
+							std::cout << " Loss: " << loss << std::endl;
+							std::cout << " frame counter:" << frameCounter << std::endl;
+							std::cout << "----------------------------------" << std::endl;
+						}
 
-							uint8_t* bytePtr = reinterpret_cast<uint8_t*>(rawOutput);
-							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + sizeof(rawOutput));
-							Network.Send(sendBuffer.data(), sendBuffer.size());
+						if (loss < 0.0001 && !saveModel)
+						{
+							saveModel = true;
+							std::cout << "----------------------------------" << std::endl;
+							std::cout << "!!! Model Converged !!!" << std::endl;
+							std::cout << " Loss: " << loss << std::endl;
 
-							if (frameCounter % 10 == 0) {
-								std::cout << "----------------------------------" << std::endl;
-								std::cout << "---------------Real---------------" << std::endl;
-								std::cout << "X " << inputBuffer[2].x << " Y " << inputBuffer[2].y << " Z " << inputBuffer[2].z << std::endl;
-								std::cout << "X " << inputBuffer[3].x << " Y " << inputBuffer[3].y << " Z " << inputBuffer[3].z << std::endl;
-								std::cout << "-------------Predicted------------" << std::endl;
-								std::cout << "X " << predicted[0].x << " Y " << predicted[0].y << " Z " << predicted[0].z << std::endl;
-								std::cout << "X " << predicted[1].x << " Y " << predicted[1].y << " Z " << predicted[1].z << std::endl;
-								std::cout << "----------------------------------" << std::endl;
+							trainee->SaveWeights("rig_model.pt");
+							std::cout << "-> Weights saved: " << "rig_model.pt" << std::endl;
+							std::cout << "----------------------------------" << std::endl;
+						}
+
+						if (loss < 0.0001)
+						{
+							if (!solver)
+							{
+								solver = std::make_shared<NRSolver>(model, activeProfile);
+								std::cout << "Solver Created Successfully!" << std::endl;
+								std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
+							}
+
+							if (solver)
+							{
+								std::vector<NRVector3D> solveInput;
+								solveInput.reserve(inputSize / 3);
+								for (int i = 0; i < inputSize; i += 3)
+								{
+									solveInput.push_back({data[i], data[i + 1], data[i + 2]});
+								}
+
+								std::vector<NRVector3D> predicted = solver->Solve(solveInput);
+
+								std::vector<uint8_t> sendBuffer;
+								sendBuffer.push_back(0x03);
+
+								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+								auto sendSize = predicted.size() * sizeof(NRVector3D);
+								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + sendSize);
+
+								auto len = sendBuffer.size();
+								Network.Send(sendBuffer.data(), len);
+
+								if (frameCounter % 10 == 0)
+								{
+									std::cout << "---------------Real Output---------------" << std::endl;
+									for (size_t i = 0; i < targetBuffer.size(); ++i)
+									{
+										std::cout << "B" << i << " X " << targetBuffer[i].x << " Y " << targetBuffer[i].y << " Z " << targetBuffer[i].z << std::endl;
+									}
+									std::cout << "-------------Predicted Output------------" << std::endl;
+									for (size_t i = 0; i < predicted.size(); ++i)
+									{
+										std::cout << "B" << i << " X " << predicted[i].x << " Y " << predicted[i].y << " Z " << predicted[i].z << std::endl;
+									}
+									std::cout << "----------------------------------" << std::endl;
+								}
 							}
 						}
 					}
-
 				}
 			}
 			else
 			{
-				std::cout << "Ping received package[" << bytes << "] bytesData." << std::endl;
-				std::cout << "------------------------------" << std::endl;
+				std::cout << "----------------------------------" << std::endl;
+				std::cout << "Ping received package[0]" << bytes << " bytes." << std::endl;
+				std::cout << "----------------------------------" << std::endl;
 			}
 		}
 	}

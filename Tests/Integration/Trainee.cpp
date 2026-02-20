@@ -4,7 +4,9 @@
 
 #include "NRInterfaces/INRModel.h"
 #include "NRTrainee/NRTrainee.h"
+#include "NRCore/NRParse.h"
 #include <iostream>
+#include <filesystem>
 
 class NRMLPModel : public NR::INRModel<float>
 {
@@ -44,53 +46,61 @@ int main()
 
 	std::cout << "=== QUICK TRAINING (TRAINEE TEST) ===" << std::endl;
 
-	NR::NRRigDescription MyBotRig;
-	MyBotRig.TargetCount = 3;
+	NR::NRModelProfile MyBotRig;
+	
+	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
+	if (!std::filesystem::exists(DataAssetPath))
+	{
+		DataAssetPath = "../Tests/Datasets/Foot_IK.json";
+	}
 
-	MyBotRig.AddBone(0, "Bone1");
-	MyBotRig.AddBone(1, "Bone2");
-	MyBotRig.AddBone(2, "Bone3");
+	if (!NR::NRParse::LoadProfileFromJson(DataAssetPath, MyBotRig))
+	{
+		std::cerr << "Failed to load data asset: " << DataAssetPath << std::endl;
+		return 1;
+	}
 
+	std::cout << "Profile loaded: " << MyBotRig.ProfileName << std::endl;
+
+	int32_t InSize = MyBotRig.GetRequiredInputSize();
+	int32_t OutSize = MyBotRig.GetRequiredOutputSize();
 
 	std::cout << "Creating model..." << std::endl;
+	std::cout << "InputSize: " << InSize << " OutputSize: " << OutSize << std::endl;
 	// Inject new model in NRTrainee
 	auto model = std::make_shared<NRMLPModel>(
-	    MyBotRig.GetRequiredInputSize(),
+	    InSize,
 	    64,
-	    MyBotRig.GetRequiredOutputSize());
-	std::cout << "Model created. InputSize: " << MyBotRig.GetRequiredInputSize() << " OutputSize: " << MyBotRig.GetRequiredOutputSize() << std::endl;
-
+	    OutSize);
+	std::cout << "Model created." << std::endl;
+	
 	std::cout << "Creating trainee..." << std::endl;
 	NR::NRTrainee<float> trainee(model, MyBotRig, 0.01);
 	std::cout << "Trainee created." << std::endl;
 
-	std::cout << "=== model ===" << std::endl;
-	// 2 amostras de treino. Cada amostra precisa de InputSize = TargetCount * 3 floats.
-	// Como TargetCount = 3, cada amostra precisa de 3 NRVector3D.
-	std::vector<NR::NRVector3D> inputs = {
-	    // Amostra 1 (3 vetores de entrada)
-	    {0.0f, 0.0f, 0.0f},
-	    {0.0f, 0.0f, 0.0f},
-	    {0.0f, 0.0f, 0.0f},
-	    // Amostra 2 (3 vetores de entrada)
-	    {1.0f, 1.0f, 1.0f},
-	    {1.0f, 1.0f, 1.0f},
-	    {1.0f, 1.0f, 1.0f}};
+	std::cout << "=== generating data ===" << std::endl;
 
-	std::cout << "=== inputs ===" << std::endl;
-	// Para cada entrada, precisamos de 3 saídas (uma para cada osso)
-	std::vector<NR::NRVector3D> targets = {
-	    // Saída para Amostra 1 (3 ossos)
-	    {0.1f, 0.1f, 0.1f},
-	    {0.2f, 0.2f, 0.2f},
-	    {0.3f, 0.3f, 0.3f},
+	int32_t InputBonesCount = 0;
+	int32_t TargetBonesCount = 0;
+	for(const auto& b : MyBotRig.Bones) {
+		if(b.bIsTarget) TargetBonesCount++;
+		else InputBonesCount++;
+	}
 
-	    // Saída para Amostra 2 (3 ossos)
-	    {1.1f, 1.1f, 1.1f},
-	    {1.2f, 1.2f, 1.2f},
-	    {1.3f, 1.3f, 1.3f}};
+	std::cout << "Input Bones: " << InputBonesCount << ", Target Bones: " << TargetBonesCount << std::endl;
 
-	std::cout << "=== targets ===" << std::endl;
+	std::vector<NR::NRVector3D> inputs;
+	// Sample 1
+	for(int i=0; i<InputBonesCount; ++i) inputs.push_back({0.0f, 0.0f, 0.0f});
+	// Sample 2
+	for(int i=0; i<InputBonesCount; ++i) inputs.push_back({1.0f, 1.0f, 1.0f});
+
+	std::vector<NR::NRVector3D> targets;
+	// Sample 1
+	for(int i=0; i<TargetBonesCount; ++i) targets.push_back({0.5f, 0.5f, 0.5f});
+	// Sample 2
+	for(int i=0; i<TargetBonesCount; ++i) targets.push_back({1.5f, 1.5f, 1.5f});
+
 	std::cout << "Starting training loop..." << std::endl;
 	float last_loss = 0.0f;
 	try

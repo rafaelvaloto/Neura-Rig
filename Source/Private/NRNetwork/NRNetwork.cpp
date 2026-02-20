@@ -34,33 +34,38 @@ namespace NR
 		serverAddr.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces (localhost)
 		serverAddr.sin_port = htons(port);
 
-		if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+		if (bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
 		{
 			return false;
 		}
 
 		bIsRunning = true;
-		std::cout << "Socket:" << port << std::endl;
 		return true;
 	}
 
 	template<typename T>
 	void NRNetwork::GetData(std::vector<T>& OutBuffer)
 	{
-		if (std::is_same_v<T, float> && payloadSize > 0)
+		if constexpr (std::is_same_v<T, float>)
 		{
-			int count = payloadSize / sizeof(float);
-			auto data = reinterpret_cast<float*>(&inBuffer[1]);
-			OutBuffer.assign(data, data + count);
+			if (payloadSize > 0)
+			{
+				const auto count = (payloadSize / sizeof(float));
+				auto data = reinterpret_cast<const float*>(&inBuffer[1]);
+				OutBuffer.assign(data, data + count);
+			}
 		}
-		else if (std::is_same_v<T, uint8_t> && payloadSize > 0)
+		else if constexpr (std::is_same_v<T, uint8_t>)
 		{
-			auto data = reinterpret_cast<uint8_t*>(&inBuffer[1]);
-			OutBuffer.assign(data, data + payloadSize);
+			if (payloadSize > 0)
+			{
+				auto data = reinterpret_cast<const uint8_t*>(&inBuffer[1]);
+				OutBuffer.assign(data, data + payloadSize);
+			}
 		}
 	}
 
-	uint8_t NRNetwork::GetHeader()
+	uint8_t NRNetwork::GetHeader() const
 	{
 		return header;
 	}
@@ -68,7 +73,7 @@ namespace NR
 	int NRNetwork::Receive()
 	{
 		int clientSize = sizeof(clientAddr);
-		int bytesReceived = recvfrom(serverSocket, inBuffer, sizeof(inBuffer), 0, (sockaddr*)&clientAddr, &clientSize);
+		const int bytesReceived = recvfrom(serverSocket, inBuffer, sizeof(inBuffer), 0, reinterpret_cast<sockaddr*>(&clientAddr), &clientSize);
 
 		header = 0;
 		payloadSize = 0;
@@ -82,8 +87,8 @@ namespace NR
 
 	void NRNetwork::Send(const uint8_t* data, int size)
 	{
-		int clientSize = sizeof(clientAddr);
-		sendto(serverSocket, (const char*)data, size, 0, (struct sockaddr*)&clientAddr, clientSize);
+		constexpr int clientSize = sizeof(clientAddr);
+		sendto(serverSocket, reinterpret_cast<const char*>(data), size, 0, reinterpret_cast<struct sockaddr*>(&clientAddr), clientSize);
 	}
 
 	void NRNetwork::Stop()

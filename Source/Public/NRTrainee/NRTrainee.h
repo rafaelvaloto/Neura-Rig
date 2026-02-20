@@ -14,7 +14,7 @@ namespace NR
 	{
 		std::shared_ptr<INRModel<T>> TargetModel;
 		std::unique_ptr<torch::optim::Adam> Optimizer;
-		NRRigDescription RigDesc;
+		NRModelProfile RigDesc;
 
 		/**
 		 * Calculates the next rotation for a given trainee in a training schedule.
@@ -24,7 +24,7 @@ namespace NR
 		 * @param LearningRate The step or interval to determine the next trainee.
 		 */
 	public:
-		NRTrainee(std::shared_ptr<INRModel<T>> TargetModel, NRRigDescription Rig, double LearningRate = 1e-3);
+		NRTrainee(std::shared_ptr<INRModel<T>> TargetModel, NRModelProfile Rig, double LearningRate = 1e-3);
 
 		/**
 		 * Determines the next step for a trainee in the training process.

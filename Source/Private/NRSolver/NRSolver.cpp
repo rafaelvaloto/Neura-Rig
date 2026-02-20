@@ -5,17 +5,19 @@
 
 namespace NR
 {
-	std::vector<NR::NRVector3D> NRSolver::Solve(const std::vector<NR::NRVector3D>& Inputs)
+	std::vector<NRVector3D> NRSolver::Solve(const std::vector<NRVector3D>& Inputs)
 	{
-		// 1. Criar o Tensor a partir dos vetores de entrada (Pés)
-		// {1, TotalFloats} -> Ex: 1 linha por 6 colunas (2 pés)
-		int64_t inputSize = Inputs.size() * 3;
-		torch::Tensor InputTensor = torch::from_blob((void*)Inputs.data(), {1, inputSize}, torch::kFloat32).to(Device);
+		// 1. Criar o Tensor a partir dos vetores de entrada
+		int32_t InCount = RigDesc.GetRequiredInputSize();
+		int32_t batchSize = (static_cast<int32_t>(Inputs.size()) * 3) / InCount;
+
+		torch::Tensor InputTensor = torch::from_blob((void*)Inputs.data(), {batchSize, InCount}, torch::kFloat32);
 
 		torch::NoGradGuard NoGrad;
 		torch::Tensor OutputTensor = NeuralNetwork->Forward(InputTensor).to(torch::kCPU);
 
-		std::vector<NR::NRVector3D> Results(RigDesc.TargetCount);
+		int32_t OutCount = RigDesc.GetRequiredOutputSize();
+		std::vector<NRVector3D> Results(OutCount / 3);
 		std::memcpy(Results.data(), OutputTensor.data_ptr<float>(), OutputTensor.nbytes());
 		return Results;
 	}

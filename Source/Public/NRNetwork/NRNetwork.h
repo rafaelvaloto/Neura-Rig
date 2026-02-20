@@ -72,7 +72,7 @@ namespace NR
 		 *
 		 * @return The 8-bit header value from the most recent Receive() call.
 		 */
-		uint8_t GetHeader();
+		uint8_t GetHeader() const;
 
 		/**
 		 * @brief Stops the server and closes the socket connection.
@@ -95,14 +95,14 @@ namespace NR
 		 *
 		 * First byte of received packets, used to validate and route incoming data.
 		 */
-		uint8_t header;
+		uint8_t header{};
 
 		/**
 		 * @brief Size in bytes of the actual payload data.
 		 *
 		 * Excludes header bytes, represents the length of valid data in inBuffer.
 		 */
-		int payloadSize;
+		int payloadSize{};
 
 		/**
 		 * @brief Socket handle for the server connection.
@@ -117,9 +117,15 @@ namespace NR
 		 * Contains the IP address, port, and protocol family information
 		 * for the bound socket endpoint.
 		 */
-		sockaddr_in serverAddr;
+		sockaddr_in serverAddr{};
 
-		sockaddr_in clientAddr;
+		/**
+		 * @brief Stores the address information of the connected client.
+		 *
+		 * Holds the network address details necessary for communication
+		 * with the client during a socket connection.
+		 */
+		sockaddr_in clientAddr{};
 
 		/**
 		 * @brief Indicates whether the server is currently active.

@@ -2,6 +2,10 @@
 // Copyright (c) 2026 Rafael Valoto
 // All rights reserved.
 #pragma once
+#include <utility>
+
+#include <utility>
+
 #include "NRCore/NRTypes.h"
 #include "NRInterfaces/INRModel.h"
 
@@ -22,7 +26,7 @@ namespace NR
 		 * @param Description Configuration for the rig to be solved.
 		 * @param DeviceTarget The target device (CPU or CUDA) where tensor computations will be executed. Defaults to CPU.
 		 */
-		explicit NRSolver(std::shared_ptr<INRModel<float>> ModelNetwork, const NRRigDescription& Description, const torch::Device DeviceTarget = torch::kCPU)
+		explicit NRSolver(const std::shared_ptr<INRModel<float>>& ModelNetwork, const NRModelProfile& Description, const torch::Device DeviceTarget = torch::kCPU)
 		    : NeuralNetwork(ModelNetwork)
 		    , RigDesc(Description)
 		    , Device(DeviceTarget)
@@ -56,7 +60,7 @@ namespace NR
 		 * components, hierarchy, and operational parameters. It serves as the foundational
 		 * descriptor for setting up and manipulating rig-based systems.
 		 */
-		NRRigDescription RigDesc;
+		NRModelProfile RigDesc;
 	};
 
 } // namespace NR

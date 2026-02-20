@@ -1,0 +1,14 @@
+﻿{
+  "Profile": "Foot_IK",
+  "Schema": {
+    "Bones": [
+      {"Name": "thigh_r", "Size": 3, "IsTarget": false},
+      {"Name": "thigh_l", "Size": 3, "IsTarget": false},
+      {"Name": "calf_r", "Size": 3, "IsTarget": false},
+      {"Name": "calf_l", "Size": 3, "IsTarget": false},
+      {"Name": "foot_r", "Size": 3, "IsTarget": true},
+      {"Name": "foot_l", "Size": 3, "IsTarget": true}
+    ],
+    "Variables": []
+  }
+}

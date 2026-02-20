@@ -3,6 +3,10 @@
 // All rights reserved.
 #pragma once
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #pragma warning(push)
 #pragma warning(disable : 4244)
 #pragma warning(disable : 4267)
@@ -25,36 +29,55 @@ namespace NR
 		BoneData = 0x02
 	};
 
-	struct NRRigDescription
+	// Define o que é cada pedaço do seu pacote UDP
+	struct NRDataBlock
 	{
-		// We use the Map to know WHO the bones are
-		std::unordered_map<int64_t, std::string> BoneMap;
+		std::string Name;   // Ex: "Velocity", "Input", "foot_r"
+		int32_t FloatCount; // Ex: 3 (Vector), 2 (Input Axis), 1 (Scalar)
+		bool bIsTarget;     // false = Input da IA | true = Output da IA (Label)
+	};
 
-		// TargetCount is usually what your MODEL expects at output (fixed or configured)
-		int64_t TargetCount = 0;
+	// O seu novo "Template" de Configuração
+	struct NRModelProfile
+	{
+		std::string ProfileName; // Ex: "Locomotion_LowerBody"
+		std::vector<NRDataBlock> Bones;
+		std::vector<NRDataBlock> Variables;
 
-		// Adds a bone and updates the count automatically
-		void AddBone(int64_t index, const std::string& name)
+		void AddBlock(const std::string& name, int32_t size, bool isTarget = false)
 		{
-			BoneMap[index] = name;
+			Bones.push_back({name, size, isTarget});
 		}
 
-		// O número de ossos capturados é o tamanho do mapa
-		int64_t GetBonesCount() const
+		[[nodiscard]] int32_t GetRequiredInputSize() const
 		{
-			return static_cast<int64_t>(BoneMap.size());
+			int32_t totalSize = 0;
+			for (const auto& block : Bones)
+			{
+				if (!block.bIsTarget)
+				{
+					totalSize += block.FloatCount;
+				}
+			}
+
+			for (const auto& var : Variables)
+			{
+				totalSize += var.FloatCount;
+			};
+			return totalSize;
 		}
 
-		// Input: Baseado nos ossos que recebemos via rede (X, Y, Z para cada um)
-		int64_t GetRequiredInputSize() const
+		[[nodiscard]] int32_t GetRequiredOutputSize() const
 		{
-			return GetBonesCount() * 3;
-		}
-
-		// Output: O que o modelo deve cuspir (geralmente definido pelo modelo carregado)
-		int64_t GetRequiredOutputSize() const
-		{
-			return TargetCount * 3;
+			int32_t totalSize = 0;
+			for (const auto& block : Bones)
+			{
+				if (block.bIsTarget)
+				{
+					totalSize += block.FloatCount;
+				}
+			}
+			return totalSize;
 		}
 	};
 
