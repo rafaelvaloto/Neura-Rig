@@ -108,21 +108,19 @@ int main()
 					int32_t outputSize = activeProfile.GetRequiredOutputSize();
 					int32_t profileTotal = inputSize + outputSize;
 
-					if (totalFloats >= profileTotal && trainee)
-					{
-						std::vector<NRVector3D> inputBuffer;
-						inputBuffer.reserve(inputSize / 3);
-						for (int i = 0; i < inputSize; i += 3)
-						{
-							inputBuffer.push_back({data[i], data[i + 1], data[i + 2]});
-						}
+					// if (frameCounter % 30 == 0)
+					// {
+					// 	std::cout << "[Server] Received Packet Type 2. Payload size: " << bytes << " bytes (" << totalFloats << " floats)" << std::endl;
+					// 	std::cout << "         Expected profile total: " << profileTotal << " floats" << std::endl;
+					// }
 
-						std::vector<NRVector3D> targetBuffer;
-						targetBuffer.reserve(outputSize / 3);
-						for (int i = inputSize; i < profileTotal; i += 3)
-						{
-							targetBuffer.push_back({data[i], data[i + 1], data[i + 2]});
-						}
+					if (trainee)
+					{
+						std::vector<float> inputBuffer(inputSize);
+						std::memcpy(inputBuffer.data(), data.data(), inputSize * sizeof(float));
+
+						std::vector<float> targetBuffer(outputSize);
+						std::memcpy(targetBuffer.data(), data.data() + inputSize, outputSize * sizeof(float));
 
 						float loss = trainee->TrainStep(inputBuffer, targetBuffer);
 						if (frameCounter++ % 30 == 0)
@@ -156,20 +154,16 @@ int main()
 
 							if (solver)
 							{
-								std::vector<NRVector3D> solveInput;
-								solveInput.reserve(inputSize / 3);
-								for (int i = 0; i < inputSize; i += 3)
-								{
-									solveInput.push_back({data[i], data[i + 1], data[i + 2]});
-								}
+								std::vector<float> solveInput(inputSize);
+								std::memcpy(solveInput.data(), data.data(), inputSize * sizeof(float));
 
-								std::vector<NRVector3D> predicted = solver->Solve(solveInput);
+								std::vector<float> predicted = solver->Solve(solveInput);
 
 								std::vector<uint8_t> sendBuffer;
 								sendBuffer.push_back(0x03);
 
 								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-								auto sendSize = predicted.size() * sizeof(NRVector3D);
+								auto sendSize = predicted.size() * sizeof(float);
 								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + sendSize);
 
 								auto len = sendBuffer.size();
@@ -180,12 +174,12 @@ int main()
 									std::cout << "---------------Real Output---------------" << std::endl;
 									for (size_t i = 0; i < targetBuffer.size(); ++i)
 									{
-										std::cout << "B" << i << " X " << targetBuffer[i].x << " Y " << targetBuffer[i].y << " Z " << targetBuffer[i].z << std::endl;
+										std::cout << "O" << i << " Value: " << targetBuffer[i] << std::endl;
 									}
 									std::cout << "-------------Predicted Output------------" << std::endl;
 									for (size_t i = 0; i < predicted.size(); ++i)
 									{
-										std::cout << "B" << i << " X " << predicted[i].x << " Y " << predicted[i].y << " Z " << predicted[i].z << std::endl;
+										std::cout << "O" << i << " Value: " << predicted[i] << std::endl;
 									}
 									std::cout << "----------------------------------" << std::endl;
 								}

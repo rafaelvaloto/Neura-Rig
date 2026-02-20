@@ -1,14 +1,40 @@
 ﻿{
   "Profile": "Foot_IK",
   "Schema": {
-    "Bones": [
-      {"Name": "thigh_r", "Size": 3, "IsTarget": false},
-      {"Name": "thigh_l", "Size": 3, "IsTarget": false},
-      {"Name": "calf_r", "Size": 3, "IsTarget": false},
-      {"Name": "calf_l", "Size": 3, "IsTarget": false},
-      {"Name": "foot_r", "Size": 3, "IsTarget": true},
-      {"Name": "foot_l", "Size": 3, "IsTarget": true}
+    "Inputs": [
+      { "Name": "pelvis_pos", "Size": 3 },
+      { "Name": "pelvis_quat", "Size": 4 },
+
+      { "Name": "thigh_r_pos", "Size": 3 },
+      { "Name": "thigh_r_quat", "Size": 4 },
+      { "Name": "calf_r_pos", "Size": 3 },
+      { "Name": "calf_r_quat", "Size": 4 },
+      { "Name": "foot_r_pos", "Size": 3 },
+      { "Name": "foot_r_quat", "Size": 4 },
+
+      { "Name": "thigh_l_pos", "Size": 3 },
+      { "Name": "thigh_l_quat", "Size": 4 },
+      { "Name": "calf_l_pos", "Size": 3 },
+      { "Name": "calf_l_quat", "Size": 4 },
+      { "Name": "foot_l_pos", "Size": 3 },
+      { "Name": "foot_l_quat", "Size": 4 },
+
+      { "Name": "foot_r_target", "Size": 3 },
+      { "Name": "ground_normal_r", "Size": 3 },
+      { "Name": "has_hit_r", "Size": 1 },
+
+      { "Name": "foot_l_target", "Size": 3 },
+      { "Name": "ground_normal_l", "Size": 3 },
+      { "Name": "has_hit_l", "Size": 1 }
     ],
-    "Variables": []
+    "Outputs": [
+      { "Name": "thigh_r_quat_out", "Size": 4 },
+      { "Name": "calf_r_quat_out", "Size": 4 },
+      { "Name": "foot_r_quat_out", "Size": 4 },
+
+      { "Name": "thigh_l_quat_out", "Size": 4 },
+      { "Name": "calf_l_quat_out", "Size": 4 },
+      { "Name": "foot_l_quat_out", "Size": 4 }
+    ]
   }
 }

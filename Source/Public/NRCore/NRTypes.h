@@ -41,41 +41,35 @@ namespace NR
 	struct NRModelProfile
 	{
 		std::string ProfileName; // Ex: "Locomotion_LowerBody"
-		std::vector<NRDataBlock> Bones;
-		std::vector<NRDataBlock> Variables;
+		std::vector<NRDataBlock> Inputs;
+		std::vector<NRDataBlock> Outputs;
 
-		void AddBlock(const std::string& name, int32_t size, bool isTarget = false)
+		void AddInput(const std::string& name, int32_t size)
 		{
-			Bones.push_back({name, size, isTarget});
+			Inputs.push_back({name, size, false});
+		}
+
+		void AddOutput(const std::string& name, int32_t size)
+		{
+			Outputs.push_back({name, size, true});
 		}
 
 		[[nodiscard]] int32_t GetRequiredInputSize() const
 		{
 			int32_t totalSize = 0;
-			for (const auto& block : Bones)
+			for (const auto& block : Inputs)
 			{
-				if (!block.bIsTarget)
-				{
-					totalSize += block.FloatCount;
-				}
+				totalSize += block.FloatCount;
 			}
-
-			for (const auto& var : Variables)
-			{
-				totalSize += var.FloatCount;
-			};
 			return totalSize;
 		}
 
 		[[nodiscard]] int32_t GetRequiredOutputSize() const
 		{
 			int32_t totalSize = 0;
-			for (const auto& block : Bones)
+			for (const auto& block : Outputs)
 			{
-				if (block.bIsTarget)
-				{
-					totalSize += block.FloatCount;
-				}
+				totalSize += block.FloatCount;
 			}
 			return totalSize;
 		}

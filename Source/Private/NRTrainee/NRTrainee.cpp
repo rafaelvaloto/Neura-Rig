@@ -14,16 +14,16 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	float NRTrainee<T>::TrainStep(const std::vector<NRVector3D>& InputVectors, const std::vector<NRVector3D>& TargetVectors)
+	float NRTrainee<T>::TrainStep(const std::vector<float>& InputFloats, const std::vector<float>& TargetFloats)
 	{
 		int32_t InCount = RigDesc.GetRequiredInputSize();
 		int32_t OutCount = RigDesc.GetRequiredOutputSize();
 
-		int32_t InBatchSize = (InputVectors.size() * 3) / InCount;
-		int32_t TargetBatchSize = (TargetVectors.size() * 3) / OutCount;
+		int32_t InBatchSize = static_cast<int32_t>(InputFloats.size()) / InCount;
+		int32_t TargetBatchSize = static_cast<int32_t>(TargetFloats.size()) / OutCount;
 
-		at::Tensor InputTensor = torch::from_blob((void*)InputVectors.data(), {InBatchSize, InCount}, torch::kFloat).clone();
-		const auto TargetTensor = torch::from_blob((void*)TargetVectors.data(), {TargetBatchSize, OutCount}, torch::kFloat).clone();
+		at::Tensor InputTensor = torch::from_blob((void*)InputFloats.data(), {InBatchSize, InCount}, torch::kFloat).clone();
+		const auto TargetTensor = torch::from_blob((void*)TargetFloats.data(), {TargetBatchSize, OutCount}, torch::kFloat).clone();
 
 		Optimizer->zero_grad();
 		const torch::Tensor prediction = TargetModel->Forward(InputTensor);

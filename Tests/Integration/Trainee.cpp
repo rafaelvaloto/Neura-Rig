@@ -80,26 +80,27 @@ int main()
 
 	std::cout << "=== generating data ===" << std::endl;
 
-	int32_t InputBonesCount = 0;
-	int32_t TargetBonesCount = 0;
-	for(const auto& b : MyBotRig.Bones) {
-		if(b.bIsTarget) TargetBonesCount++;
-		else InputBonesCount++;
-	}
+	// Com a nova estrutura, os tamanhos de entrada/saída podem não ser múltiplos de 3.
+	// Vamos gerar dados em blocos de 3 floats (NRVector3D) suficientes para cobrir todos os floats necessários.
+	auto ceilDiv3 = [](int32_t v) { return (v + 2) / 3; };
+	int32_t InputTripletsPerSample = ceilDiv3(InSize);
+	int32_t TargetTripletsPerSample = ceilDiv3(OutSize);
 
-	std::cout << "Input Bones: " << InputBonesCount << ", Target Bones: " << TargetBonesCount << std::endl;
+	std::cout << "Triplets per sample -> Inputs: " << InputTripletsPerSample << ", Targets: " << TargetTripletsPerSample << std::endl;
 
 	std::vector<NR::NRVector3D> inputs;
-	// Sample 1
-	for(int i=0; i<InputBonesCount; ++i) inputs.push_back({0.0f, 0.0f, 0.0f});
-	// Sample 2
-	for(int i=0; i<InputBonesCount; ++i) inputs.push_back({1.0f, 1.0f, 1.0f});
+	inputs.reserve((InputTripletsPerSample) * 2);
+	// Sample 1 (zeros)
+	for(int i=0; i<InputTripletsPerSample; ++i) inputs.push_back({0.0f, 0.0f, 0.0f});
+	// Sample 2 (uns)
+	for(int i=0; i<InputTripletsPerSample; ++i) inputs.push_back({1.0f, 1.0f, 1.0f});
 
 	std::vector<NR::NRVector3D> targets;
+	targets.reserve((TargetTripletsPerSample) * 2);
 	// Sample 1
-	for(int i=0; i<TargetBonesCount; ++i) targets.push_back({0.5f, 0.5f, 0.5f});
+	for(int i=0; i<TargetTripletsPerSample; ++i) targets.push_back({0.5f, 0.5f, 0.5f});
 	// Sample 2
-	for(int i=0; i<TargetBonesCount; ++i) targets.push_back({1.5f, 1.5f, 1.5f});
+	for(int i=0; i<TargetTripletsPerSample; ++i) targets.push_back({1.5f, 1.5f, 1.5f});
 
 	std::cout << "Starting training loop..." << std::endl;
 	float last_loss = 0.0f;

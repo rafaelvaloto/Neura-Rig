@@ -29,11 +29,11 @@ namespace NR
 		/**
 		 * Determines the next step for a trainee in the training process.
 		 *
-		 * @param InputVectors The current step number in the training sequence.
-		 * @param TargetVectors The total number of steps in the training program.
+		 * @param InputFloats The current step number in the training sequence.
+		 * @param TargetFloats The total number of steps in the training program.
 		 * @return The next step number for the trainee, or a completion status if all steps are finished.
 		 */
-		float TrainStep(const std::vector<NRVector3D>& InputVectors, const std::vector<NRVector3D>& TargetVectors);
+		float TrainStep(const std::vector<float>& InputFloats, const std::vector<float>& TargetFloats);
 
 		void SaveWeights(const std::string& Path);
 		void LoadWeights(const std::string& Path);

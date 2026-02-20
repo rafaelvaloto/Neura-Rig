@@ -41,29 +41,29 @@ namespace NR
 			{
 				auto schema = j["Schema"];
 
-				// Popula Variables (se existirem)
-				if (schema.contains("Variables"))
+				// Popula Inputs
+				if (schema.contains("Inputs"))
 				{
-					for (const auto& item : schema["Variables"])
+					for (const auto& item : schema["Inputs"])
 					{
 						NRDataBlock block;
-						block.Name = item.value("Name", "Unknown_Var");
+						block.Name = item.value("Name", "Unknown_Input");
 						block.FloatCount = item.value("Size", 1);
-						block.bIsTarget = item.value("IsTarget", false);
-						OutProfile.Variables.push_back(block);
+						block.bIsTarget = false;
+						OutProfile.Inputs.push_back(block);
 					}
 				}
 
-				// Popula Bones (se existirem)
-				if (schema.contains("Bones"))
+				// Popula Outputs
+				if (schema.contains("Outputs"))
 				{
-					for (const auto& item : schema["Bones"])
+					for (const auto& item : schema["Outputs"])
 					{
 						NRDataBlock block;
-						block.Name = item.value("Name", "Unknown_Bone");
-						block.FloatCount = item.value("Size", 3);
-						block.bIsTarget = item.value("IsTarget", false);
-						OutProfile.Bones.push_back(block);
+						block.Name = item.value("Name", "Unknown_Output");
+						block.FloatCount = item.value("Size", 1);
+						block.bIsTarget = true;
+						OutProfile.Outputs.push_back(block);
 					}
 				}
 			}

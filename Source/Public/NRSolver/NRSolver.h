@@ -37,10 +37,10 @@ namespace NR
 
 		/**
 		 * @brief Solves the rig transformations for the given target positions.
-		 * @param Targets Vector of target positions for which the rig transformations need to be computed.
-		 * @return Vector of computed rig transformations corresponding to the input targets.
+		 * @param Inputs Vector of input floats (positions, quaternions, etc.) as defined in the profile.
+		 * @return Vector of computed rig transformation floats corresponding to the outputs defined in the profile.
 		 */
-		std::vector<NRVector3D> Solve(const std::vector<NRVector3D>& Targets);
+		std::vector<float> Solve(const std::vector<float>& Inputs);
 
 	private:
 		/**
