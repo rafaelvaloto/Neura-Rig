@@ -59,16 +59,6 @@ Output (24 floats):
 
 ---
 
-## Relay to Engine.
-
-The data received from the AI and retransmitted to the character's control rig.
-
-![Rig Control](Rig_control_example.png)
-
-Applies the vectors as a target for rig_control.
-
-![Rig apply calf vectors](RigCalf.png)
----
 
 ## 🛠️ Key Architecture
 * **NRMLPModel:** A multi-layer perceptron optimized for spatial regression.
@@ -78,3 +68,4 @@ Applies the vectors as a target for rig_control.
 **Next Step:** Transitioning from pose-based learning to **Time-Series Prediction**, allowing the AI to generate full walking or running cycles without any external input.
 
 ![GIF](NEWRigTwo.gif)
+
