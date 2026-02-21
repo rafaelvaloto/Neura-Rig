@@ -36,7 +36,6 @@ namespace NR
 
 			// Extrai o nome do profile
 			OutProfile.ProfileName = j.value("Profile", "Unknown_Profile");
-
 			if (j.contains("Schema"))
 			{
 				auto schema = j["Schema"];
@@ -51,6 +50,19 @@ namespace NR
 						block.FloatCount = item.value("Size", 1);
 						block.bIsTarget = false;
 						OutProfile.Inputs.push_back(block);
+					}
+				}
+
+				// Popula Targets
+				if (schema.contains("Targets"))
+				{
+					for (const auto& item : schema["Targets"])
+					{
+						NRDataBlock block;
+						block.Name = item.value("Name", "Unknown_Output");
+						block.FloatCount = item.value("Size", 1);
+						block.bIsTarget = true;
+						OutProfile.Targets.push_back(block);
 					}
 				}
 

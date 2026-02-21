@@ -1,40 +1,50 @@
 ﻿{
   "Profile": "Foot_IK",
+  "Version": 1,
+  "Header": 2,
+  "ResponseHeader": 3,
   "Schema": {
     "Inputs": [
-      { "Name": "pelvis_pos", "Size": 3 },
-      { "Name": "pelvis_quat", "Size": 4 },
+      { "Name": "pelvis_pos",       "Space": "WS", "Type": "vec3", "Size": 3, "Offset": 0  },
+      { "Name": "pelvis_quat",      "Space": "WS", "Type": "quat", "Size": 4, "Offset": 3  },
 
-      { "Name": "thigh_r_pos", "Size": 3 },
-      { "Name": "thigh_r_quat", "Size": 4 },
-      { "Name": "calf_r_pos", "Size": 3 },
-      { "Name": "calf_r_quat", "Size": 4 },
-      { "Name": "foot_r_pos", "Size": 3 },
-      { "Name": "foot_r_quat", "Size": 4 },
+      { "Name": "thigh_r_pos",      "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 7  },
+      { "Name": "thigh_r_quat",     "Space": "LS", "Type": "quat", "Size": 4, "Offset": 10 },
+      { "Name": "calf_r_pos",       "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 14 },
+      { "Name": "calf_r_quat",      "Space": "LS", "Type": "quat", "Size": 4, "Offset": 17 },
+      { "Name": "foot_r_pos",       "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 21 },
+      { "Name": "foot_r_quat",      "Space": "LS", "Type": "quat", "Size": 4, "Offset": 24 },
 
-      { "Name": "thigh_l_pos", "Size": 3 },
-      { "Name": "thigh_l_quat", "Size": 4 },
-      { "Name": "calf_l_pos", "Size": 3 },
-      { "Name": "calf_l_quat", "Size": 4 },
-      { "Name": "foot_l_pos", "Size": 3 },
-      { "Name": "foot_l_quat", "Size": 4 },
+      { "Name": "thigh_l_pos",      "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 28 },
+      { "Name": "thigh_l_quat",     "Space": "LS", "Type": "quat", "Size": 4, "Offset": 31 },
+      { "Name": "calf_l_pos",       "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 35 },
+      { "Name": "calf_l_quat",      "Space": "LS", "Type": "quat", "Size": 4, "Offset": 38 },
+      { "Name": "foot_l_pos",       "Space": "LS", "Type": "vec3", "Size": 3, "Offset": 42 },
+      { "Name": "foot_l_quat",      "Space": "LS", "Type": "quat", "Size": 4, "Offset": 45 },
 
-      { "Name": "foot_r_target", "Size": 3 },
-      { "Name": "ground_normal_r", "Size": 3 },
-      { "Name": "has_hit_r", "Size": 1 },
+      { "Name": "ground_normal_r",  "Space": "PS", "Type": "vec3", "Size": 3, "Offset": 49 },
+      { "Name": "has_hit_r",        "Space": "-",  "Type": "flag", "Size": 1, "Offset": 52 },
 
-      { "Name": "foot_l_target", "Size": 3 },
-      { "Name": "ground_normal_l", "Size": 3 },
-      { "Name": "has_hit_l", "Size": 1 }
+      { "Name": "ground_normal_l",  "Space": "PS", "Type": "vec3", "Size": 3, "Offset": 53 },
+      { "Name": "has_hit_l",        "Space": "-",  "Type": "flag", "Size": 1, "Offset": 56 }
+    ],
+    "Targets": [
+      { "Name": "foot_r_target",    "Space": "PS", "Type": "vec3", "Size": 3, "Offset": 57 },
+      { "Name": "foot_l_target",    "Space": "PS", "Type": "vec3", "Size": 3, "Offset": 60 }
     ],
     "Outputs": [
-      { "Name": "thigh_r_quat_out", "Size": 4 },
-      { "Name": "calf_r_quat_out", "Size": 4 },
-      { "Name": "foot_r_quat_out", "Size": 4 },
+      { "Name": "thigh_r_quat_out", "Space": "LS", "Type": "quat", "Size": 4, "Offset": 0  },
+      { "Name": "calf_r_quat_out",  "Space": "LS", "Type": "quat", "Size": 4, "Offset": 4  },
+      { "Name": "foot_r_quat_out",  "Space": "LS", "Type": "quat", "Size": 4, "Offset": 8  },
 
-      { "Name": "thigh_l_quat_out", "Size": 4 },
-      { "Name": "calf_l_quat_out", "Size": 4 },
-      { "Name": "foot_l_quat_out", "Size": 4 }
+      { "Name": "thigh_l_quat_out", "Space": "LS", "Type": "quat", "Size": 4, "Offset": 12 },
+      { "Name": "calf_l_quat_out",  "Space": "LS", "Type": "quat", "Size": 4, "Offset": 16 },
+      { "Name": "foot_l_quat_out",  "Space": "LS", "Type": "quat", "Size": 4, "Offset": 20 }
     ]
+  },
+  "Bones": {
+    "Chain_R": ["thigh_r", "calf_r", "foot_r"],
+    "Chain_L": ["thigh_l", "calf_l", "foot_l"],
+    "Root":    "pelvis"
   }
 }

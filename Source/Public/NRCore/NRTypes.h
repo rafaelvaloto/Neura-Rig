@@ -37,16 +37,39 @@ namespace NR
 		bool bIsTarget;     // false = Input da IA | true = Output da IA (Label)
 	};
 
+
+	// Forward Kinematics de uma chain de 2 bones
+	// Recebe: hip_pos(B,3), bone_lengths(L1, L2), 3 quats(B,4 cada)
+	// Retorna: foot_pos calculado(B,3)
+	struct FKResult
+	{
+		torch::Tensor FootPos;   // (B, 3)
+		torch::Tensor KneePos;  // (B, 3) - útil para regularização
+	};
+
+	struct IKLossResult
+	{
+		torch::Tensor TotalLoss;
+		torch::Tensor PosLoss;
+		torch::Tensor RegLoss;
+	};
+
 	// O seu novo "Template" de Configuração
 	struct NRModelProfile
 	{
 		std::string ProfileName; // Ex: "Locomotion_LowerBody"
 		std::vector<NRDataBlock> Inputs;
+		std::vector<NRDataBlock> Targets;
 		std::vector<NRDataBlock> Outputs;
 
 		void AddInput(const std::string& name, int32_t size)
 		{
 			Inputs.push_back({name, size, false});
+		}
+
+		void AddTarget(const std::string& name, int32_t size)
+		{
+			Targets.push_back({name, size, false});
 		}
 
 		void AddOutput(const std::string& name, int32_t size)
@@ -59,7 +82,23 @@ namespace NR
 			int32_t totalSize = 0;
 			for (const auto& block : Inputs)
 			{
-				totalSize += block.FloatCount;
+				if (!block.bIsTarget)
+				{
+					totalSize += block.FloatCount;
+				}
+			}
+			return totalSize;
+		}
+
+		[[nodiscard]] int32_t GetRequiredTargetsSize() const
+		{
+			int32_t totalSize = 0;
+			for (const auto& block : Targets)
+			{
+				if (block.bIsTarget)
+				{
+					totalSize += block.FloatCount;
+				}
 			}
 			return totalSize;
 		}
@@ -74,5 +113,7 @@ namespace NR
 			return totalSize;
 		}
 	};
+
+
 
 } // namespace NR

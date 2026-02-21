@@ -55,7 +55,7 @@ int main()
 
 	std::shared_ptr<NRSolver> solver = nullptr;
 	std::shared_ptr<NRMLPModel> model = nullptr;
-	std::shared_ptr<NRTrainee<float>> trainee = nullptr;
+	std::shared_ptr<NRTrainee<float> > trainee = nullptr;
 
 	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
 	if (!std::filesystem::exists(DataAssetPath))
@@ -72,14 +72,13 @@ int main()
 	std::cout << "----------------------------------" << std::endl;
 	std::cout << "Profile loaded: " << activeProfile.ProfileName << std::endl;
 	std::cout << " -> Input Size: " << activeProfile.GetRequiredInputSize() << std::endl;
+	std::cout << " -> Targets Size: " << activeProfile.GetRequiredTargetsSize() << std::endl;
 	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
 
-	model = std::make_shared<NRMLPModel>(
-			activeProfile.GetRequiredInputSize(),
-			64,
-			activeProfile.GetRequiredOutputSize());
+	auto InputSize = activeProfile.GetRequiredInputSize() + activeProfile.GetRequiredTargetsSize();
+	model = std::make_shared<NRMLPModel>(InputSize, 64, activeProfile.GetRequiredOutputSize());
 
-	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 0.0001);
+	trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, 0.0001);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
@@ -104,25 +103,13 @@ int main()
 					Network.GetData(data);
 
 					auto totalFloats = data.size();
-					int32_t inputSize = activeProfile.GetRequiredInputSize();
-					int32_t outputSize = activeProfile.GetRequiredOutputSize();
-					int32_t profileTotal = inputSize + outputSize;
-
-					// if (frameCounter % 30 == 0)
-					// {
-					// 	std::cout << "[Server] Received Packet Type 2. Payload size: " << bytes << " bytes (" << totalFloats << " floats)" << std::endl;
-					// 	std::cout << "         Expected profile total: " << profileTotal << " floats" << std::endl;
-					// }
-
+					std::cout << "[Server] totalFloats size: " << totalFloats << " bytes " << std::endl;
 					if (trainee)
 					{
-						std::vector<float> inputBuffer(inputSize);
-						std::memcpy(inputBuffer.data(), data.data(), inputSize * sizeof(float));
-
-						std::vector<float> targetBuffer(outputSize);
-						std::memcpy(targetBuffer.data(), data.data() + inputSize, outputSize * sizeof(float));
-
-						float loss = trainee->TrainStep(inputBuffer, targetBuffer);
+						std::vector<float> inputBuffer(InputSize);
+						std::memcpy(inputBuffer.data(), data.data(), InputSize);
+						std::cout << "InputBuffer copy " << inputBuffer.size() << std::endl;
+						float loss = trainee->TrainStep(inputBuffer, 45.751953, 41.705513, 45.752106, 41.705494);
 						if (frameCounter++ % 30 == 0)
 						{
 							std::cout << "----------------------------------" << std::endl;
@@ -154,8 +141,8 @@ int main()
 
 							if (solver)
 							{
-								std::vector<float> solveInput(inputSize);
-								std::memcpy(solveInput.data(), data.data(), inputSize * sizeof(float));
+								std::vector<float> solveInput(InputSize);
+								std::memcpy(solveInput.data(), data.data(), InputSize);
 
 								std::vector<float> predicted = solver->Solve(solveInput);
 
@@ -163,7 +150,7 @@ int main()
 								sendBuffer.push_back(0x03);
 
 								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-								auto sendSize = predicted.size() * sizeof(float);
+								auto sendSize = predicted.size();
 								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + sendSize);
 
 								auto len = sendBuffer.size();
@@ -171,11 +158,6 @@ int main()
 
 								if (frameCounter % 10 == 0)
 								{
-									std::cout << "---------------Real Output---------------" << std::endl;
-									for (size_t i = 0; i < targetBuffer.size(); ++i)
-									{
-										std::cout << "O" << i << " Value: " << targetBuffer[i] << std::endl;
-									}
 									std::cout << "-------------Predicted Output------------" << std::endl;
 									for (size_t i = 0; i < predicted.size(); ++i)
 									{

@@ -75,6 +75,16 @@ namespace NR
 		int clientSize = sizeof(clientAddr);
 		const int bytesReceived = recvfrom(serverSocket, inBuffer, sizeof(inBuffer), 0, reinterpret_cast<sockaddr*>(&clientAddr), &clientSize);
 
+		if (bytesReceived == SOCKET_ERROR)
+		{
+			int err = WSAGetLastError();
+			if (err != WSAEWOULDBLOCK)
+			{
+				std::cerr << "[NRNetwork] Error receiving data: " << err << std::endl;
+			}
+			return -1;
+		}
+
 		header = 0;
 		payloadSize = 0;
 		if (bytesReceived > 1)

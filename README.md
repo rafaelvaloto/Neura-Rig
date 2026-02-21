@@ -42,62 +42,21 @@ During active solving, the AI-generated coordinates follow the skeletal constrai
 ---
 
 ```aiignore
-Socket:6003
-Success socket NeuralRig port: 6003
-Waiting for messages...
-------------------------------
-Ping received package[0] bytesData.
-------------------------------
-Data received: 28 bytes
-Mapped Bone: 0 -> foot_r
-Mapped Bone: 1 -> foot_l
-Rig configuration updated!
-------------------------------
-Model trainee configuration!
-------------------------------
-----------------------------------
- Loss: 685.126
- frame counter:1
-----------------------------------
-----------------------------------
- Loss: 633.676
- frame counter:31
-----------------------------------
-----------------------------------
-```
-* **End of the log showing that the machine learned to calculate the final position of the character's knee.**
+Input (63 floats):
+┌─────────┬──────────┬─────────────────────┬─────────────────────┬──────────────────┐
+│ pelvis  │ pelvis   │  thigh/calf/foot_r  │  thigh/calf/foot_l  │ targets + normals│
+│ pos(3)  │ quat(4)  │  pos+quat ×3 (21)   │  pos+quat ×3 (21)   │ + hits (14)      │
+│ [0..2]  │ [3..6]   │  [7..27]            │  [28..48]           │ [49..62]         │
+└─────────┴──────────┴─────────────────────┴─────────────────────┴──────────────────┘
 
-```cppignore
-----------------------------------
-----------------------------------
- Loss: 0.00144899
- frame counter:841
-----------------------------------
-----------------------------------
-!!! Model Converged !!!
- Loss: 0.000985299
--> Weights saved: rig_model.pt
-----------------------------------
-----------------------------------
- Loss: 0.000546656
- frame counter:871
-----------------------------------
-----------------------------------
- Loss: 0.000199387
- frame counter:901
-----------------------------------
-←[36m
-=== SWITCHING TO SOLVER MODE ===←[0m
-←[32mSolver Created Successfully!←[0m
-----------------------------------
----------------Real---------------
-X 45.817 Y -0.00022319 Z -3.77223e-05
-X -45.8464 Y -5.14835e-06 Z 0.000105146
--------------Predicted------------
-X 45.8178 Y -0.000841931 Z -3.80576e-05
-X -45.8463 Y -5.50598e-06 Z 0.000102237
-----------------------------------
+Output (24 floats):
+┌──────────────────────────┬──────────────────────────┐
+│  thigh/calf/foot_r quats │  thigh/calf/foot_l quats │
+│  quat ×3 (12)            │  quat ×3 (12)            │
+│  [0..11]                 │  [12..23]                │
+└──────────────────────────┴──────────────────────────┘
 ```
+
 ---
 
 ## Relay to Engine.

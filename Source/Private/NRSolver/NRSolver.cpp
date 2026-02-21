@@ -7,8 +7,7 @@ namespace NR
 {
 	std::vector<float> NRSolver::Solve(const std::vector<float>& Inputs)
 	{
-		// 1. Criar o Tensor a partir dos vetores de entrada
-		int32_t InCount = RigDesc.GetRequiredInputSize();
+		int32_t InCount = RigDesc.GetRequiredInputSize() + RigDesc.GetRequiredTargetsSize();
 		int32_t batchSize = static_cast<int32_t>(Inputs.size()) / InCount;
 
 		torch::Tensor InputTensor = torch::from_blob((void*)Inputs.data(), {batchSize, InCount}, torch::kFloat32);
