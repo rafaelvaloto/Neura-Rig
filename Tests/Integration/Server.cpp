@@ -79,7 +79,7 @@ int main()
 	auto OutputSize = activeProfile.GetRequiredOutputSize();
 	model = std::make_shared<NRMLPModel>(InputSize, 64, OutputSize);
 
-	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 1e-5);
+	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 0.0001);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
@@ -92,6 +92,7 @@ int main()
 		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Waiting for messages..." << std::endl;
 		static int frameCounter = 0;
+		std::vector<float> data;
 		while (true)
 		{
 			int bytes = Network.Receive();
@@ -100,17 +101,52 @@ int main()
 				uint8_t header = Network.GetHeader();
 				if (header == 2)
 				{
-					std::vector<float> data;
 					Network.GetData(data);
-
-					auto totalFloats = data.size();
-					std::cout << "[Server] totalFloats size: " << totalFloats << " bytes " << std::endl;
 					if (trainee)
 					{
-						std::vector<float> inputBuffer(InputSize);
-						std::memcpy(inputBuffer.data(), data.data(), InputSize);
-						std::cout << "InputBuffer copy " << inputBuffer.size() << std::endl;
-						float loss = trainee->TrainStep(inputBuffer, 45.75f, 41.70f, 45.75f, 41.70f);
+						// int offset = 0;
+						// for (auto Block : activeProfile.Inputs)
+						// {
+						// 	std::cout << "-----------------INPUTS----------------" << std::endl;
+						// 	std::cout << "-------------"<< offset <<"------------" << std::endl;
+						// 	if (Block.FloatCount == 4)
+						// 	{
+						// 		std::cout << Block.Name << ": x " << data[offset] << " y " << data[offset + 1] << " z " << data[offset+2] << " w " << data[offset+3] << std::endl;
+						// 	}
+						// 	else if (Block.FloatCount == 3)
+						// 	{
+						// 		std::cout << Block.Name << ": x " << data[offset] << " y " << data[offset+1] << " z " << data[offset+2] << std::endl;
+						// 	}
+						// 	else if (Block.FloatCount == 1)
+						// 	{
+						// 		std::cout << Block.Name << ": " << data[offset] << std::endl;
+						// 	}
+						// 	offset += Block.FloatCount;
+						// 	std::cout << "----------------------------------------" << std::endl;
+						// }
+
+						// int offsetT = 0;
+						// for (auto Block : activeProfile.Targets)
+						// {
+						// 	std::cout << "----------------TARGETS----------------" << std::endl;
+						// 	std::cout << "-------------"<< offsetT <<"------------" << std::endl;
+						// 	if (Block.FloatCount == 4)
+						// 	{
+						// 		std::cout << Block.Name << ": x " << data[offsetT] << " y " << data[offsetT + 1] << " z " << data[offsetT+2] << " w " << data[offsetT+3] << std::endl;
+						// 	}
+						// 	else if (Block.FloatCount == 3)
+						// 	{
+						// 		std::cout << Block.Name << ": x " << data[offsetT] << " y " << data[offsetT+1] << " z " << data[offsetT+2] << std::endl;
+						// 	}
+						// 	else if (Block.FloatCount == 1)
+						// 	{
+						// 		std::cout << Block.Name << ": " << data[offsetT] << std::endl;
+						// 	}
+						// 	offsetT += Block.FloatCount;
+						// 	std::cout << "----------------------------------------" << std::endl;
+						// }
+
+						float loss = trainee->TrainStep(data, 45.751953f, 41.705513f, 45.752106f, 41.705494f);
 						if (frameCounter++ % 30 == 0)
 						{
 							std::cout << "----------------------------------" << std::endl;
@@ -131,7 +167,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.0001)
+						if (loss < 0.0001 && saveModel)
 						{
 							if (!solver)
 							{
