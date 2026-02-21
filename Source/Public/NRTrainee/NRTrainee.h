@@ -58,7 +58,8 @@ namespace NR
 		// Normaliza quaternions: q / ||q||
 		torch::Tensor NormalizeQuats(const torch::Tensor& q)
 		{
-			return q / (q.norm(2, /*dim=*/1, /*keepdim=*/true) + 1e-8f);
+			auto norm = q.norm(2, 1, true);
+			return q / (norm + 1e-8f);
 		}
 
 		// Multiplicação de quaternions: q1 * q2 (batched)
@@ -75,22 +76,21 @@ namespace NR
 			auto y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
 			auto z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
 
-			return torch::stack({x, y, z, w}, /*dim=*/1);
+			return torch::stack({x, y, z, w}, 1);
 		}
 
 		// Aplica rotação de um quaternion num vetor (batched)
 		// q: (B, 4)  v: (B, 3)  → (B, 3)
 		torch::Tensor QuatRotateVector(const torch::Tensor& q, const torch::Tensor& v)
 		{
-			// q = (x, y, z, w)
-			auto qvec = q.slice(/*dim=*/1, 0, 3); // (B, 3) - parte xyz
-			auto qw = q.slice(/*dim=*/1, 3, 4);   // (B, 1) - parte w
+			auto qvec = q.slice(1, 0, 3); // (B, 3)
+			auto qw = q.select(1, 3).unsqueeze(1); // (B, 1)
 
 			// t = 2 * cross(qvec, v)
-			auto t = 2.0f * torch::linalg_cross(qvec, v);
+			auto t = 2.0f * torch::linalg_cross(qvec, v, 1);
 
 			// result = v + qw * t + cross(qvec, t)
-			return v + qw * t + torch::linalg_cross(qvec, t);
+			return v + qw * t + torch::linalg_cross(qvec, t, 1);
 		}
 
 		FKResult ForwardKinematicsChain(
@@ -100,7 +100,7 @@ namespace NR
 			float L1,                         // comprimento femur
 			float L2,                         // comprimento tíbia
 			const torch::Tensor& ThighQuat,   // (B, 4) — PREDITO pelo modelo
-			const torch::Tensor& CalfQuat,    // (B, 4) — PREDITO pelo modelo
+			const torch::Tensor& CalfQuat,
 			const torch::Tensor& BoneAxis);    // direção do bone no espaço local
 
 	};

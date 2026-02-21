@@ -76,9 +76,10 @@ int main()
 	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
 
 	auto InputSize = activeProfile.GetRequiredInputSize() + activeProfile.GetRequiredTargetsSize();
-	model = std::make_shared<NRMLPModel>(InputSize, 64, activeProfile.GetRequiredOutputSize());
+	auto OutputSize = activeProfile.GetRequiredOutputSize();
+	model = std::make_shared<NRMLPModel>(InputSize, 64, OutputSize);
 
-	trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, 0.0001);
+	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 1e-5);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
@@ -109,7 +110,7 @@ int main()
 						std::vector<float> inputBuffer(InputSize);
 						std::memcpy(inputBuffer.data(), data.data(), InputSize);
 						std::cout << "InputBuffer copy " << inputBuffer.size() << std::endl;
-						float loss = trainee->TrainStep(inputBuffer, 45.751953, 41.705513, 45.752106, 41.705494);
+						float loss = trainee->TrainStep(inputBuffer, 45.75f, 41.70f, 45.75f, 41.70f);
 						if (frameCounter++ % 30 == 0)
 						{
 							std::cout << "----------------------------------" << std::endl;
