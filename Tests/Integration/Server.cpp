@@ -125,7 +125,7 @@ int main()
 	auto OutputSize = activeProfile.GetRequiredOutputSize();
 	model = std::make_shared<NRMLPModel>(InputSize, 64, OutputSize);
 
-	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 1e-3);
+	trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 1e-4);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
@@ -159,7 +159,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.0001 && !saveModel)
+						if (loss < 0.001 && !saveModel)
 						{
 							saveModel = true;
 							std::cout << "----------------------------------" << std::endl;
@@ -171,7 +171,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.0001 && saveModel)
+						if (loss < 0.001 && saveModel)
 						{
 							if (!solver)
 							{
@@ -196,16 +196,12 @@ int main()
 
 								auto len = sendBuffer.size();
 								Network.Send(sendBuffer.data(), len);
-
-								if (frameCounter % 10 == 0)
+								std::cout << "-------------Predicted Output------------" << std::endl;
+								for (size_t i = 0; i < predicted.size(); ++i)
 								{
-									std::cout << "-------------Predicted Output------------" << std::endl;
-									for (size_t i = 0; i < predicted.size(); ++i)
-									{
-										std::cout << "O" << i << " Value: " << predicted[i] << std::endl;
-									}
-									std::cout << "----------------------------------" << std::endl;
+									std::cout << "O" << i << " Value: " << predicted[i] << std::endl;
 								}
+								std::cout << "----------------------------------" << std::endl;
 							}
 						}
 					}
