@@ -94,8 +94,6 @@ namespace NR
 		}
 
 		FKResult ForwardKinematicsChain(
-			const torch::Tensor& PelvisPos,   // (B, 3) — do input[0..2]
-			const torch::Tensor& PelvisQuat,  // (B, 4) — do input[3..6]
 			const torch::Tensor& ThighOffset, // (B, 3) — thigh_pos LS do input (offset do pelvis)
 			float L1,                         // comprimento femur
 			float L2,                         // comprimento tíbia
