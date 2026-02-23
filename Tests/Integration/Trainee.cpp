@@ -145,7 +145,6 @@ int main()
 		trainingData[49] = 0.0f;
 		trainingData[50] = 0.0f;
 		trainingData[51] = 1.0f;
-
 		// Has hit R
 		trainingData[52] = 1.0f;
 
@@ -153,22 +152,23 @@ int main()
 		trainingData[53] = 0.0f;
 		trainingData[54] = 0.0f;
 		trainingData[55] = 1.0f;
-
 		// Has hit L
 		trainingData[56] = 1.0f;
 
-		// Foot R target PS — pé deve ficar ~80cm abaixo do pelvis
-		// Hip está em (10, 0, 90) WS. Target no chão: (10, 0, 5)
-		// Em PS (relativo ao pelvis): (10, 0, 5) - (0,0,90) = (10, 0, -85)
-		// MAS alcance máximo = L1+L2 = 45+40 = 85. Vamos usar 80 pra ficar dentro:
-		trainingData[57] = 10.0f;  // X
-		trainingData[58] = 0.0f;   // Y
-		trainingData[59] = -20.0f; // Z (80cm abaixo do pelvis — dentro do alcance do hip)
+		// velocidade
+		trainingData[57] = 1.0f;  // X
+		trainingData[58] = 0.5f;  // Y
+		trainingData[59] = 0.0f;
+
+		// Foot R target PS
+		trainingData[60] = 10.0f;  // X
+		trainingData[61] = 0.0f;   // Y
+		trainingData[62] = -20.0f; // Z (80cm abaixo do pelvis — dentro do alcance do hip)
 
 		// Foot L target PS
-		trainingData[60] = -10.0f;
-		trainingData[61] = 0.0f;
-		trainingData[62] = 10.0f;
+		trainingData[63] = -10.0f;
+		trainingData[64] = 0.0f;
+		trainingData[65] = 10.0f;
 
 		std::cout << "Data prepared. Starting loop." << std::endl;
 		for (int i = 0; i < 10000; ++i)

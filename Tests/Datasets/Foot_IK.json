@@ -27,6 +27,7 @@
 
       { "Name": "ground_normal_l",  "Space": "PS", "Type": "vec3", "Size": 3, "Offset": 53 },
       { "Name": "has_hit_l",        "Space": "-",  "Type": "flag", "Size": 1, "Offset": 56 },
+
       { "Name": "VelocityDir",      "Space": "KM", "Type": "vec3", "Size": 3, "Offset": 57 }
     ],
     "Targets": [

@@ -159,7 +159,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.001 && !saveModel)
+						if (loss < 0.01 && !saveModel)
 						{
 							saveModel = true;
 							std::cout << "----------------------------------" << std::endl;
@@ -171,7 +171,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.001 && saveModel)
+						if (loss < 0.01 && saveModel)
 						{
 							if (!solver)
 							{
@@ -183,19 +183,24 @@ int main()
 							if (solver)
 							{
 								std::vector<float> solveInput(InputSize);
-								std::memcpy(solveInput.data(), data.data(), InputSize);
+								std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
 
 								std::vector<float> predicted = solver->Solve(solveInput);
 
 								std::vector<uint8_t> sendBuffer;
-								sendBuffer.push_back(0x03);
+								sendBuffer.push_back(0x03); // Header
 
+								// 2. (24 * 4 = 96)
+								size_t bytesToCopy = predicted.size() * sizeof(float);
 								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-								auto sendSize = predicted.size();
-								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + sendSize);
 
-								auto len = sendBuffer.size();
-								Network.Send(sendBuffer.data(), len);
+								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+								size_t totalPayloadSize = sendBuffer.size(); // 97 bytes
+
+								std::cout << "Sending " << totalPayloadSize << " bytes..." << std::endl;
+								Network.Send(sendBuffer.data(), totalPayloadSize);
+
+								// Logs de Debug (O0 a O23)
 								std::cout << "-------------Predicted Output------------" << std::endl;
 								for (size_t i = 0; i < predicted.size(); ++i)
 								{
