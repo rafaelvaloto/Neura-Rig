@@ -15,23 +15,14 @@ class NRMLPModel : public NR::INRModel<float>
 public:
 	NRMLPModel(int64_t InputSize, int64_t HiddenSize, int64_t OutputSize)
 	{
-		std::cout << "DEBUG: NRMLPModel constructor start" << std::endl;
 		auto linear1 = torch::nn::Linear(InputSize, HiddenSize);
-		std::cout << "DEBUG: Linear1 created" << std::endl;
 		auto relu1 = torch::nn::ReLU();
-		std::cout << "DEBUG: ReLU1 created" << std::endl;
 		auto linear2 = torch::nn::Linear(HiddenSize, HiddenSize);
-		std::cout << "DEBUG: Linear2 created" << std::endl;
 		auto relu2 = torch::nn::ReLU();
-		std::cout << "DEBUG: ReLU2 created" << std::endl;
 		auto linear3 = torch::nn::Linear(HiddenSize, OutputSize);
-		std::cout << "DEBUG: Linear3 created" << std::endl;
 
 		Network = torch::nn::Sequential(linear1, relu1, linear2, relu2, linear3);
-		std::cout << "DEBUG: NRMLPModel Network defined" << std::endl;
 		register_module("Network", Network);
-		std::cout << "DEBUG: NRMLPModel register_module done" << std::endl;
-		std::cout << std::flush;
 	}
 
 	torch::Tensor Forward(torch::Tensor Input) override
@@ -102,73 +93,53 @@ int main()
 		std::cout << "TotalSize: " << TotalSize << std::endl;
 		std::vector<float> trainingData(TotalSize, 0.0f);
 
-		// Pelvis pos WS — pelvis a 90cm de altura (Z up no UE5)
-		trainingData[0] = 0.0f;   // X
+		// Thigh R Pos (PS) - Offset 0
+		trainingData[0] = 15.0f;  // X (um pouco para a direita do centro)
 		trainingData[1] = 0.0f;   // Y
-		trainingData[2] = 90.0f;  // Z (altura)
+		trainingData[2] = 0.0f;   // Z (altura do quadril relativa à pelvis)
 
-		// Pelvis quat — identity
-		trainingData[3] = 0.0f;  // X
-		trainingData[4] = 0.0f;  // Y
-		trainingData[5] = 0.0f;  // Z
-		trainingData[6] = 1.0f;  // W
+		// Thigh L Pos (PS) - Offset 3
+		trainingData[3] = -15.0f; // X (um pouco para a esquerda do centro)
+		trainingData[4] = 0.0f;   // Y
+		trainingData[5] = 0.0f;   // Z
 
-		// Thigh R offset LS (deslocamento lateral do hip)
-		trainingData[7] = 10.0f;  // X (para a direita)
-		trainingData[8] = 0.0f;   // Y
-		trainingData[9] = 0.0f;   // Z
+		// Bone Lengths - Offsets 6 a 9
+		float L1 = 45.75f;
+		float L2 = 41.70f;
+		trainingData[6] = L1; // L1 R
+		trainingData[7] = L2; // L2 R
+		trainingData[8] = L1; // L1 L
+		trainingData[9] = L2; // L2 L
 
-		// Thigh R quat LS — identity
-		trainingData[13] = 1.0f;  // W (offset 10+3)
+		// Ground Normals (Z up) - Offsets 10 e 14
+		trainingData[12] = 1.0f; // Normal R (Z=1)
+		trainingData[13] = 1.0f; // Has Hit R (1.0 = true)
+		trainingData[16] = 1.0f; // Normal L (Z=1)
+		trainingData[17] = 1.0f; // Has Hit L (1.0 = true)
 
-		// Calf R quat LS — identity
-		trainingData[20] = 1.0f;  // W (offset 17+3)
+		// Velocity e Pole Vector (Apontando para frente no Y) - Offsets 18 e 21
+		trainingData[19] = 0.0f; // Velocity Y
+		trainingData[22] = 1.0f; // Pole Vector Y (Joelho aponta para frente)
 
-		// Foot R quat LS — identity
-		trainingData[27] = 1.0f;  // W (offset 24+3)
+		// Bone Axis (O que veio do log do Unreal) - Offsets 24 e 27
+		trainingData[24] = 1.0f;  // Axis R (X=1)
+		trainingData[27] = -1.0f; // Axis L (X=-1)
 
-		// Thigh L offset LS
-		trainingData[28] = -10.0f; // X (para a esquerda)
-		trainingData[29] = 0.0f;
-		trainingData[30] = 0.0f;
+		// Pelvis Quat (Identidade) - Offset 30
+		trainingData[33] = 1.0f; // W=1
 
-		// Thigh L quat LS — identity
-		trainingData[34] = 1.0f;  // W (offset 31+3)
+		// --- TARGETS ---
 
-		// Calf L quat LS — identity
-		trainingData[41] = 1.0f;  // W (offset 38+3)
+		// Foot Target R (PS) - Offset 34
+		// Posição no chão: mesma vertical do quadril, abaixo a uma distância L1+L2
+		trainingData[34] = 15.0f;           // X
+		trainingData[35] = 0.0f;            // Y
+		trainingData[36] = -(L1 + L2 - 5.0f); // Z (Perna quase esticada)
 
-		// Foot L quat LS — identity
-		trainingData[48] = 1.0f;  // W (offset 45+3)
-
-		// Ground normal R (apontando pra cima)
-		trainingData[49] = 0.0f;
-		trainingData[50] = 0.0f;
-		trainingData[51] = 1.0f;
-		// Has hit R
-		trainingData[52] = 1.0f;
-
-		// Ground normal L
-		trainingData[53] = 0.0f;
-		trainingData[54] = 0.0f;
-		trainingData[55] = 1.0f;
-		// Has hit L
-		trainingData[56] = 1.0f;
-
-		// velocidade
-		trainingData[57] = 1.0f;  // X
-		trainingData[58] = 0.5f;  // Y
-		trainingData[59] = 0.0f;
-
-		// Foot R target PS
-		trainingData[60] = 10.0f;  // X
-		trainingData[61] = 0.0f;   // Y
-		trainingData[62] = -20.0f; // Z (80cm abaixo do pelvis — dentro do alcance do hip)
-
-		// Foot L target PS
-		trainingData[63] = -10.0f;
-		trainingData[64] = 0.0f;
-		trainingData[65] = 10.0f;
+		// Foot Target L (PS) - Offset 37
+		trainingData[37] = -15.0f;          // X
+		trainingData[38] = 0.0f;            // Y
+		trainingData[39] = -(L1 + L2 - 5.0f); // Z
 
 		std::cout << "Data prepared. Starting loop." << std::endl;
 		for (int i = 0; i < 10000; ++i)

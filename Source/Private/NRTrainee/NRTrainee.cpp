@@ -24,10 +24,9 @@ namespace NR
 		auto InputTensor = torch::from_blob((void*)InputFloats.data(), {BatchSize, InCount}, options).clone();
 
 		Optimizer->zero_grad();
-
 		auto Prediction = TargetModel->Forward(InputTensor);
 
-		auto [TotalLoss, PosLoss, RegLoss] = ComputeIKLoss(InputTensor, Prediction, L1_R, L2_R, L1_L, L2_L);
+		auto [TotalLoss, PosLoss, RotationLoss, RegLoss] = ComputeIKLoss(InputTensor, Prediction, L1_R, L2_R, L1_L, L2_L);
 		TotalLoss.backward();
 		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
 		Optimizer->step();
@@ -36,16 +35,26 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	FKResult NRTrainee<T>::ForwardKinematicsChain(const torch::Tensor& ThighOffset, float L1, float L2, const torch::Tensor& ThighQuat, const torch::Tensor& CalfQuat, const torch::Tensor& BoneAxis)
+	FKResult NRTrainee<T>::ForwardKinematicsChain(
+		const torch::Tensor& ThighOffset,
+		float L1,
+		float L2,
+		const torch::Tensor& ThighQuat,
+		const torch::Tensor& CalfQuat,
+		const torch::Tensor& BoneAxis)
 	{
 		const auto& HipPosPS = ThighOffset;
-		auto ThighQuatPS = NormalizeQuats(ThighQuat);
 
-		auto ThighDir = QuatRotateVector(ThighQuatPS, BoneAxis);
+		auto ThighQuatNorm = NormalizeQuats(ThighQuat);
+		auto ThighDir = QuatRotateVector(ThighQuatNorm, BoneAxis);
+
 		auto KneePosPS = HipPosPS + ThighDir * L1;
 
-		auto CalfQuatPS = NormalizeQuats(QuatMultiply(ThighQuatPS, CalfQuat));
+		// Calculate the Cumulative Rotation of the Shin (Thigh * Shin)
+		// CalfQuantity is local, multiply to get the parent space (Thigh)
+		auto CalfQuatPS = NormalizeQuats(QuatMultiply(ThighQuatNorm, CalfQuat));
 
+		// Final Foot Position
 		auto CalfDir = QuatRotateVector(CalfQuatPS, BoneAxis);
 		auto FootPosPS = KneePosPS + CalfDir * L2;
 
@@ -53,70 +62,97 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
+	AnalyticResult NRTrainee<T>::SolveAnalyticIK(const torch::Tensor& HipPos, const torch::Tensor& TargetPos, float L1, float L2, const torch::Tensor& BoneAxis, const torch::Tensor& PoleVec)
+	{
+		auto ToTarget = TargetPos - HipPos;
+		auto Dist = torch::norm(ToTarget, 2, 1, true);
+
+		auto MaxDist = L1 + L2 - 0.01f;
+		auto MinDist = std::abs(L1 - L2) + 0.01f;
+		auto D = torch::clamp(Dist, MinDist, MaxDist);
+
+		auto CosB = (L1 * L1 + L2 * L2 - D.pow(2)) / (2.0f * L1 * L2);
+		auto AngleB = torch::acos(torch::clamp(CosB, -1.0f, 1.0f));
+
+		auto CosA = (L1 * L1 + D.pow(2) - L2 * L2) / (2.0f * L1 * D);
+		auto AngleA = torch::acos(torch::clamp(CosA, -1.0f, 1.0f));
+
+		// Orientation Construction (Leg Triangle)
+		auto TargetDir = ToTarget / D;
+		auto RightVec = torch::linalg_cross(TargetDir, PoleVec);
+		auto UpVec = torch::linalg_cross(RightVec, TargetDir);
+		UpVec = UpVec / torch::norm(UpVec, 2, 1, true);
+
+		// Bending axis (Normal to the triangle)
+		auto BendAxis = torch::linalg_cross(TargetDir, UpVec);
+		BendAxis = BendAxis / torch::norm(BendAxis, 2, 1, true);
+
+		// Thigh: Rotation to look at the target + Rotation of angle A
+		auto LookAtQuat = QuatLookAt(BoneAxis, TargetDir);
+		auto RotatorA = QuatFromAxisAngle(BendAxis, AngleA);
+		auto ThighFinal = QuatMultiply(LookAtQuat, RotatorA);
+
+		// Calf: Only bend at angle B on the bend axis.
+		auto CalfFinal = QuatFromAxisAngle(BendAxis, AngleB);
+
+		return { ThighFinal, CalfFinal };
+	}
+
+	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeIKLoss(const torch::Tensor& Input, const torch::Tensor& PredQuats, float L1_R, float L2_R, float L1_L, float L2_L)
 	{
-		int B = Input.size(0);
+		auto HipPosR = Input.slice(1, 0, 3);
+		auto HipPosL = Input.slice(1, 3, 6);
+		auto HasHitR = Input.slice(1, 13, 16);
+		auto HasHitL = Input.slice(1, 16, 19);
+		auto PoleVec = PredQuats.slice(1, 21, 24);
 
-		auto HipPosR = Input.slice(1, 7, 10);
-		auto HipPosL = Input.slice(1, 28, 31);
-		auto HasHitR = Input.slice(1, 52, 53);
-		auto HasHitL = Input.slice(1, 56, 57);
-		auto FootTargetR = Input.slice(1, 60, 63);
-		auto FootTargetL = Input.slice(1, 63, 66);
+		auto AxisR = Input.slice(1, 24, 27);
+		auto AxisL = Input.slice(1, 27, 30);
 
-		auto ThighR_Q = NormalizeQuats(PredQuats.slice(1, 0, 4));
-		auto CalfR_Q = NormalizeQuats(PredQuats.slice(1, 4, 8));
-		auto FootR_Q = NormalizeQuats(PredQuats.slice(1, 8, 12));
+		auto FootTargetR = Input.slice(1, 34, 37);
+		auto FootTargetL = Input.slice(1, 37, 40);
 
-		auto ThighL_Q = NormalizeQuats(PredQuats.slice(1, 12, 16));
-		auto CalfL_Q = NormalizeQuats(PredQuats.slice(1, 16, 20));
-		auto FootL_Q = NormalizeQuats(PredQuats.slice(1, 20, 24));
+		// AI prediction of the right leg
+		auto PredThighR = PredQuats.slice(1, 0, 4);
+		auto PredCalfR  = PredQuats.slice(1, 4, 8);
 
-		auto BoneAxisR = torch::tensor({1.0f, 0.0f, 0.0f}, Input.options()).unsqueeze(0).expand({B, 3});
-		auto BoneAxisL = torch::tensor({-1.0f, 0.0f, 0.0f}, Input.options()).unsqueeze(0).expand({B, 3});
+		// AI prediction of the left leg
+		auto PredThighL  = PredQuats.slice(1, 8, 12);
+		auto PredCalfL  = PredQuats.slice(1, 12, 16);
 
 		// Forward Kinematics (FK)
-		FKResult FK_R = ForwardKinematicsChain(HipPosR, L1_R, L2_R, ThighR_Q, CalfR_Q, BoneAxisR);
-		FKResult FK_L = ForwardKinematicsChain(HipPosL, L1_L, L2_L, ThighL_Q, CalfL_Q, BoneAxisL);
+		FKResult FK_R = ForwardKinematicsChain(HipPosR, L1_R, L2_R, PredThighR, PredCalfR, AxisR);
+		FKResult FK_L = ForwardKinematicsChain(HipPosL, L1_L, L2_L, PredThighL, PredCalfL, AxisL);
 
 		auto DistSqR = ((FK_R.FootPos - FootTargetR) * 0.01f).pow(2).sum(1, true);
 		auto DistSqL = ((FK_L.FootPos - FootTargetL) * 0.01f).pow(2).sum(1, true);
 
-		auto PosLoss = ((DistSqR * HasHitR).sum() + (DistSqL * HasHitL).sum()) / (HasHitR.sum() + HasHitL.sum() + 1e-6f);
+		AnalyticResult AnalyticR = SolveAnalyticIK(HipPosR, FootTargetR, L1_R, L2_R, AxisR, PoleVec);
+		AnalyticResult AnalyticL = SolveAnalyticIK(HipPosL, FootTargetL, L1_L, L2_L, AxisL, PoleVec);
 
-		// twist
-		auto TwistLoss = (ThighR_Q.slice(1, 0, 1).pow(2) + ThighL_Q.slice(1, 0, 1).pow(2)).mean();
-
-		auto HingeLossR = CalfR_Q.slice(1, 0, 1).pow(2) + CalfR_Q.slice(1, 2, 3).pow(2);
-		auto HingeLossL = CalfL_Q.slice(1, 0, 1).pow(2) + CalfL_Q.slice(1, 2, 3).pow(2);
-		auto HingeLoss = (HingeLossR + HingeLossL).mean();
-
-		auto FlipLoss = (torch::clamp(-CalfR_Q.slice(1, 1, 2), 0).pow(2) +
-		                 torch::clamp(-CalfL_Q.slice(1, 1, 2), 0).pow(2)).mean();
-
-		auto FootStabilityLoss = ((FootR_Q.slice(1, 3, 4) - 1.0f).pow(2) +
-		                          (FootL_Q.slice(1, 3, 4) - 1.0f).pow(2)).mean();
-
+		// Quat loss
 		auto QuatRegLoss = torch::tensor(0.0f, Input.options());
-		std::vector<torch::Tensor> q_list = {ThighR_Q, CalfR_Q, FootR_Q, ThighL_Q, CalfL_Q, FootL_Q};
+		std::vector<torch::Tensor> q_list = {PredThighR, PredCalfR, PredThighL, PredCalfL};
 		for (auto& q : q_list)
+		{
 			QuatRegLoss += (q.norm(2, 1) - 1.0f).pow(2).mean();
+		}
 
+		// Position loss
+		auto PosLoss = (DistSqR.mean() + DistSqL.mean()) * 0.5f;
+
+		// Analytic Rotation Loss
+		auto RotationLossR = (PredThighR - AnalyticR.ThighQuat).pow(2).mean() + (PredCalfR - AnalyticR.CalfQuat).pow(2).mean();
+		auto RotationLossL = (PredThighL - AnalyticL.ThighQuat).pow(2).mean() + (PredCalfL - AnalyticL.CalfQuat).pow(2).mean();
+		auto RotationLoss = (RotationLossR + RotationLossL) * 0.5f;
+
+		float lambda_rot = 2.0f;
 		float lambda_pos = 1.0f;
 		float lambda_reg = 0.1f;
-		float lambda_twist = 0.5f;
-		float lambda_hinge = 0.5f;
-		float lambda_flip = 1.0f;
-		float lambda_foot = 0.2f;
 
-		auto TotalLoss = (PosLoss * lambda_pos) +
-		                 (QuatRegLoss * lambda_reg) +
-		                 (TwistLoss * lambda_twist) +
-		                 (HingeLoss * lambda_hinge) +
-		                 (FlipLoss * lambda_flip) +
-		                 (FootStabilityLoss * lambda_foot);
-
-		return {TotalLoss, PosLoss, QuatRegLoss};
+		auto TotalLoss = (PosLoss * lambda_pos) + (RotationLoss * lambda_rot) + (QuatRegLoss * lambda_reg);
+		return {TotalLoss, PosLoss, RotationLoss, QuatRegLoss};
 	}
 
 	template<FloatingPoint T>

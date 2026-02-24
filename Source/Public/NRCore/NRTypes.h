@@ -51,7 +51,13 @@ namespace NR
 	{
 		torch::Tensor TotalLoss;
 		torch::Tensor PosLoss;
+		torch::Tensor RotLoss;
 		torch::Tensor RegLoss;
+	};
+
+	struct AnalyticResult {
+		torch::Tensor ThighQuat;
+		torch::Tensor CalfQuat;
 	};
 
 	// O seu novo "Template" de Configuração

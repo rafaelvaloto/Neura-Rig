@@ -26,6 +26,10 @@ namespace NR
 	public:
 		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, double LearningRate = 1e-3);
 
+		void SaveWeights(const std::string& Path);
+
+		void LoadWeights(const std::string& Path);
+
 		/**
 		 * Executes the next step in the training process by determining the current stage.
 		 *
@@ -50,19 +54,53 @@ namespace NR
 		 */
 		IKLossResult ComputeIKLoss(const torch::Tensor& Input, const torch::Tensor& PredQuats, float L1_R, float L2_R, float L1_L, float L2_L);
 
-		void SaveWeights(const std::string& Path);
+		FKResult ForwardKinematicsChain(
+			const torch::Tensor& ThighOffset,
+			float L1,
+			float L2,
+			const torch::Tensor& ThighQuat,
+			const torch::Tensor& CalfQuat,
+			const torch::Tensor& BoneAxis);
 
-		void LoadWeights(const std::string& Path);
 
+		AnalyticResult SolveAnalyticIK(
+			const torch::Tensor& HipPos,
+			const torch::Tensor& TargetPos,
+			float L1, float L2,
+			const torch::Tensor& BoneAxis,
+			const torch::Tensor& PoleVec);
 
-		// Normaliza quaternions: q / ||q||
+		torch::Tensor QuatFromAxisAngle(const torch::Tensor& Axis, const torch::Tensor& Angle)
+		{
+			auto halfAngle = Angle * 0.5f;
+			auto s = torch::sin(halfAngle);
+			auto c = torch::cos(halfAngle);
+			return torch::cat({Axis * s.unsqueeze(1), c.unsqueeze(1)}, 1);
+		}
+
+		torch::Tensor QuatLookAt(const torch::Tensor& SourceDir, const torch::Tensor& TargetDir) {
+			// 1. Calcula o eixo de rotação (produto vetorial entre onde o osso aponta e onde deve apontar)
+			auto Axis = torch::linalg_cross(SourceDir, TargetDir);
+			auto Epsilon = 1e-6f;
+			auto Mag = torch::norm(Axis, 2, 1, true);
+
+			// Normaliza o eixo
+			Axis = Axis / (Mag + Epsilon);
+
+			// 2. Calcula o ângulo entre os dois vetores (produto escalar)
+			auto Dot = (SourceDir * TargetDir).sum(1, true);
+			auto Angle = torch::acos(torch::clamp(Dot, -1.0f, 1.0f));
+
+			// 3. Usa a sua função QuatFromAxisAngle para gerar o Quaternion
+			return QuatFromAxisAngle(Axis, Angle.squeeze(1));
+		}
+
 		torch::Tensor NormalizeQuats(const torch::Tensor& q)
 		{
 			auto norm = q.norm(2, 1, true);
 			return q / (norm + 1e-8f);
 		}
 
-		// Multiplicação de quaternions: q1 * q2 (batched)
 		// q = (x, y, z, w)
 		torch::Tensor QuatMultiply(const torch::Tensor& q1, const torch::Tensor& q2)
 		{
@@ -79,12 +117,10 @@ namespace NR
 			return torch::stack({x, y, z, w}, 1);
 		}
 
-		// Aplica rotação de um quaternion num vetor (batched)
-		// q: (B, 4)  v: (B, 3)  → (B, 3)
 		torch::Tensor QuatRotateVector(const torch::Tensor& q, const torch::Tensor& v)
 		{
-			auto qvec = q.slice(1, 0, 3); // (B, 3)
-			auto qw = q.select(1, 3).unsqueeze(1); // (B, 1)
+			auto qw = q.select(1, 3).unsqueeze(1);
+			auto qvec = q.slice(1, 0, 3);
 
 			// t = 2 * cross(qvec, v)
 			auto t = 2.0f * torch::linalg_cross(qvec, v, 1);
@@ -93,13 +129,6 @@ namespace NR
 			return v + qw * t + torch::linalg_cross(qvec, t, 1);
 		}
 
-		FKResult ForwardKinematicsChain(
-			const torch::Tensor& ThighOffset, // (B, 3) — thigh_pos LS do input (offset do pelvis)
-			float L1,                         // comprimento femur
-			float L2,                         // comprimento tíbia
-			const torch::Tensor& ThighQuat,   // (B, 4) — PREDITO pelo modelo
-			const torch::Tensor& CalfQuat,
-			const torch::Tensor& BoneAxis);    // direção do bone no espaço local
 
 	};
 } // namespace NR
