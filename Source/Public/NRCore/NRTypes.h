@@ -88,10 +88,7 @@ namespace NR
 			int32_t totalSize = 0;
 			for (const auto& block : Inputs)
 			{
-				if (!block.bIsTarget)
-				{
-					totalSize += block.FloatCount;
-				}
+				totalSize += block.FloatCount;
 			}
 			return totalSize;
 		}
@@ -101,10 +98,7 @@ namespace NR
 			int32_t totalSize = 0;
 			for (const auto& block : Targets)
 			{
-				if (block.bIsTarget)
-				{
-					totalSize += block.FloatCount;
-				}
+				totalSize += block.FloatCount;
 			}
 			return totalSize;
 		}

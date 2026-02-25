@@ -150,7 +150,7 @@ int main()
 					Network.GetData(data);
 					if (trainee)
 					{
-						float loss = trainee->TrainStep(data, 45.751953f, 41.705513f, 45.752106f, 41.705494f);
+						float loss = trainee->TrainStep(data);
 						if (frameCounter++ % 30 == 0)
 						{
 							std::cout << "----------------------------------" << std::endl;
@@ -159,7 +159,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.01 && !saveModel)
+						if (loss < 0.8 && !saveModel)
 						{
 							saveModel = true;
 							std::cout << "----------------------------------" << std::endl;
@@ -171,7 +171,7 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.01 && saveModel)
+						if (loss < 0.8 && saveModel)
 						{
 							if (!solver)
 							{

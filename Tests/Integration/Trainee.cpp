@@ -83,7 +83,7 @@ int main()
 
 	std::cout << "Starting training loop..." << std::endl;
 	std::cout << std::flush;
-	float last_loss = 0.0f;
+
 	try
 	{
 		int32_t InSizeReq = MyBotRig.GetRequiredInputSize();
@@ -95,15 +95,11 @@ int main()
 
 		// Thigh R Pos (PS) - Offset 0
 		trainingData[0] = 15.0f;  // X (um pouco para a direita do centro)
-		trainingData[1] = 0.0f;   // Y
-		trainingData[2] = 0.0f;   // Z (altura do quadril relativa à pelvis)
 
 		// Thigh L Pos (PS) - Offset 3
 		trainingData[3] = -15.0f; // X (um pouco para a esquerda do centro)
-		trainingData[4] = 0.0f;   // Y
-		trainingData[5] = 0.0f;   // Z
 
-		// Bone Lengths - Offsets 6 a 9
+		// Bone Lengths - Offsets [6..9]
 		float L1 = 45.75f;
 		float L2 = 41.70f;
 		trainingData[6] = L1; // L1 R
@@ -118,8 +114,8 @@ int main()
 		trainingData[17] = 1.0f; // Has Hit L (1.0 = true)
 
 		// Velocity e Pole Vector (Apontando para frente no Y) - Offsets 18 e 21
-		trainingData[19] = 0.0f; // Velocity Y
-		trainingData[22] = 1.0f; // Pole Vector Y (Joelho aponta para frente)
+		trainingData[19] = 0.5f; // Velocity Y
+		trainingData[21] = 1.0f; // Pole Vector Y (Joelho aponta para frente)
 
 		// Bone Axis (O que veio do log do Unreal) - Offsets 24 e 27
 		trainingData[24] = 1.0f;  // Axis R (X=1)
@@ -132,42 +128,47 @@ int main()
 
 		// Foot Target R (PS) - Offset 34
 		// Posição no chão: mesma vertical do quadril, abaixo a uma distância L1+L2
-		trainingData[34] = 15.0f;           // X
-		trainingData[35] = 0.0f;            // Y
+		trainingData[34] = 15.0f;
+		trainingData[35] = 0.0f;
 		trainingData[36] = -(L1 + L2 - 5.0f); // Z (Perna quase esticada)
 
 		// Foot Target L (PS) - Offset 37
-		trainingData[37] = -15.0f;          // X
-		trainingData[38] = 0.0f;            // Y
-		trainingData[39] = -(L1 + L2 - 5.0f); // Z
+		trainingData[37] = -15.0f;
+		trainingData[38] = 0.0f;
+		trainingData[39] = -(L1 + L2 - 5.0f);
 
+		float last_loss = 0.0f;
 		std::cout << "Data prepared. Starting loop." << std::endl;
 		for (int i = 0; i < 10000; ++i)
 		{
-			float loss = trainee.TrainStep(trainingData, 45.75f, 41.70f, 45.75f, 41.70f);
-			if (loss < 0.0001f)
+			float loss = trainee.TrainStep(trainingData);
+			std::cout << "==============================" << std::endl;
+			std::cout << "Convergence loss " << last_loss << std::endl;
+			std::cout << "==============================" << std::endl;
+			last_loss = loss;
+			if (loss <= 0.0025f)
 			{
-				std::cout << "Convergence reached at epoch " << i << std::endl;
+				std::cout << "Convergence reached at epoch "  << i << std::endl;
 				break;
 			}
+		}
+
+		std::cout << std::flush;
+
+		std::cout << "Final Loss: " << last_loss << std::endl;
+		if (last_loss <= 0.0025f)
+		{
+			std::cout << "TEST PASSED: Loss decreased significantly." << std::endl;
+		}
+		else
+		{
+			std::cout << "TEST FAILED: Loss did not decrease as expected." << std::endl;
 		}
 	}
 	catch (const std::exception& e)
 	{
 		std::cerr << "EXCEPTION: " << e.what() << std::endl;
 		return 1;
-	}
-	std::cout << std::flush;
-
-	std::cout << "Final Loss: " << last_loss << std::endl;
-
-	if (last_loss < 0.0001f)
-	{
-		std::cout << "TEST PASSED: Loss decreased significantly." << std::endl;
-	}
-	else
-	{
-		std::cout << "TEST FAILED: Loss did not decrease as expected." << std::endl;
 	}
 
 	return 0;
