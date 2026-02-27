@@ -48,7 +48,7 @@ namespace NR
 						NRDataBlock block;
 						block.Name = item.value("Name", "Unknown_Input");
 						block.FloatCount = item.value("Size", 1);
-						block.bIsTarget = false;
+						block.Offset = item.value("Offset", 1);
 						OutProfile.Inputs.push_back(block);
 					}
 				}
@@ -61,7 +61,7 @@ namespace NR
 						NRDataBlock block;
 						block.Name = item.value("Name", "Unknown_Output");
 						block.FloatCount = item.value("Size", 1);
-						block.bIsTarget = true;
+						block.Offset = item.value("Offset", 1);
 						OutProfile.Targets.push_back(block);
 					}
 				}
@@ -74,7 +74,7 @@ namespace NR
 						NRDataBlock block;
 						block.Name = item.value("Name", "Unknown_Output");
 						block.FloatCount = item.value("Size", 1);
-						block.bIsTarget = true;
+						block.Offset = item.value("Offset", 1);
 						OutProfile.Outputs.push_back(block);
 					}
 				}

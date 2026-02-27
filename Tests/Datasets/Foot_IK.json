@@ -31,7 +31,9 @@
     "Targets": [
       { "Name": "foot_r_target",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 43 },
       { "Name": "foot_l_target",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 46 },
-      { "Name": "pelvis_pos",       "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 49 }
+      { "Name": "foot_r_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 49 },
+      { "Name": "foot_l_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 52 },
+      { "Name": "pelvis_pos",       "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 55 }
     ],
     "Outputs": [
       { "Name": "thigh_r_quat_out", "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 0  },
@@ -40,7 +42,10 @@
       { "Name": "thigh_l_quat_out", "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 12 },
       { "Name": "calf_l_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 16 },
       { "Name": "foot_l_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 20 },
-      { "Name": "pelvis_quat",      "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 24 }
+      { "Name": "pelvis_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 24 },
+      { "Name": "foot_r",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 28 },
+      { "Name": "foot_l",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 31 },
+      { "Name": "pelvis_pos",       "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 34 }
     ]
   }
 }

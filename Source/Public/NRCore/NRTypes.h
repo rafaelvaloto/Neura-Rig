@@ -32,11 +32,10 @@ namespace NR
 	// Define o que é cada pedaço do seu pacote UDP
 	struct NRDataBlock
 	{
-		std::string Name;   // Ex: "Velocity", "Input", "foot_r"
-		int32_t FloatCount; // Ex: 3 (Vector), 2 (Input Axis), 1 (Scalar)
-		bool bIsTarget;     // false = Input da IA | true = Output da IA (Label)
+		std::string Name;
+		int32_t Offset;
+		int32_t FloatCount;
 	};
-
 
 	// Forward Kinematics de uma chain de 2 bones
 	// Recebe: hip_pos(B,3), bone_lengths(L1, L2), 3 quats(B,4 cada)
@@ -67,6 +66,31 @@ namespace NR
 		std::vector<NRDataBlock> Inputs;
 		std::vector<NRDataBlock> Targets;
 		std::vector<NRDataBlock> Outputs;
+
+		torch::Tensor GetInputBoneValue(const torch::Tensor& Input, const std::string& name, bool isTarget = false) const
+		{
+			std::vector<NRDataBlock> DataBlocks = isTarget ? Targets : Inputs;
+			for (const auto& block : DataBlocks)
+			{
+				if (block.Name == name)
+				{
+					return Input.slice(1, block.Offset, block.Offset + block.FloatCount);
+				}
+			}
+			return torch::Tensor();
+		}
+
+		torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const
+		{
+			for (const auto& block : Outputs)
+			{
+				if (block.Name == name)
+				{
+					return Output.slice(1, block.Offset, block.Offset + block.FloatCount);
+				}
+			}
+			return torch::Tensor();
+		}
 
 		void AddInput(const std::string& name, int32_t size)
 		{
