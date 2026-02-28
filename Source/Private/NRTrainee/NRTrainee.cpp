@@ -122,14 +122,6 @@ namespace NR
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
-		// --- 1. FUNÇÕES DE UTILIDADE E CONVERSÃO ---
-		auto SafeNormalize = [](torch::Tensor q) {
-			return q / (torch::norm(q, 2, -1, true) + 1e-7);
-		};
-
-		constexpr float CM_TO_METERS = 0.01f;
-
-		// (CM -> SME)
 		auto L1_R = RigDesc.GetInputBoneValue(Input, "bone_l1_r");
 		auto L2_R = RigDesc.GetInputBoneValue(Input, "bone_l2_r");
 		auto L1_L = RigDesc.GetInputBoneValue(Input, "bone_l1_l");
@@ -140,7 +132,6 @@ namespace NR
 
 		auto PredQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out");
 		auto PredQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out");
-
 
 		std::string Message = "";
 		auto PredFootR = RigDesc.GetOutputBoneValue(Pred, "foot_r");
@@ -161,7 +152,6 @@ namespace NR
 		RigDesc.Debug(Message, PredQ2);
 
 		auto [TopPos_P, Offset_x] = ForwardKinematicsChain(PredQ1, PredQ2, L1_R, L2_R, PredPelvis);
-
 		auto PosLossR = torch::mse_loss(PredFootR, IdealFootR);
 		auto PosLossL = torch::mse_loss(PredFootL, IdealFootL);
 
