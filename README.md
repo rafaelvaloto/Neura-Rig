@@ -6,6 +6,15 @@ Unlike traditional rigs that rely on heavy manual mathematics, NeuraRig uses **D
 
 ---
 
+## 🛠 Project Status: Prototyping
+
+![Status](https://img.shields.io/badge/status-initial--prototype-orange)
+
+> **Important:** This repository is in its earliest stages of development.
+> - **Current State:** Research and experimental prototyping.
+> - **Stability:** Highly unstable; breaking changes occur daily.
+> - **Usability:** There is currently no MVP available for functional use.
+
 ## 🚀 Breakthrough: Live Neural Solving & High-Precision Convergence
 
 The project has successfully reached **Stage 3**, moving beyond simple data streaming into **Active Neural Inference**. The AI can now learn a character's anatomy in real-time and predict complex bone dependencies (such as Knee/Calf positions) based solely on reference inputs (Feet/Foot positions).
@@ -68,4 +77,5 @@ Output (24 floats):
 **Next Step:** Transitioning from pose-based learning to **Time-Series Prediction**, allowing the AI to generate full walking or running cycles without any external input.
 
 ![GIF](NEWRigTwo.gif)
+
 
