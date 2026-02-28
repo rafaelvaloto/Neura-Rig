@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Rafael Valoto
 // All rights reserved.
 #include "NRTrainee/NRTrainee.h"
+
+#include "NRCore/NRParse.h"
 #include "NRCore/NRTypes.h"
 
 namespace NR
@@ -31,30 +33,31 @@ namespace NR
 		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
 		Optimizer->step();
 
-		return TotalLoss.template item<float>();
+		return TotalLoss.item<float>();
 	}
 
 	template<FloatingPoint T>
 	FKResult NRTrainee<T>::ForwardKinematicsChain(
-		const torch::Tensor& ThighOffset,
-		float L1,
-		float L2,
-		const torch::Tensor& ThighQuat,
-		const torch::Tensor& CalfQuat,
+		const torch::Tensor& Q1,
+		const torch::Tensor& Q2,
+		const torch::Tensor& L1,
+		const torch::Tensor& L2,
 		const torch::Tensor& Axis)
 	{
-		// 2. Thigh
-		auto ThighQuatNorm = NormalizeQuats(ThighQuat);
-		auto ThighDir = QuatRotateVector(ThighQuatNorm, Axis);
-		auto KneePosPS = ThighOffset + ThighDir * L1;
+		auto rad1 = getAngleFromQuat(Q1);
+		auto rad2 = getAngleFromQuat(Q2);
 
-		// 3. Calf
-		// Rotação acumulada: Thigh * Calf
-		auto CalfQuatPS = NormalizeQuats(QuatMultiply(ThighQuatNorm, CalfQuat));
-		auto CalfDir = QuatRotateVector(CalfQuatPS, Axis);
-		auto FootPosPS = KneePosPS + CalfDir * L2;
+		auto h_coxa = L1 * torch::cos(rad1);
+		auto w_coxa = L1 * torch::sin(rad1);
 
-		return {FootPosPS, KneePosPS};
+		auto h_canela = L2 * torch::cos(rad2);
+		auto w_canela = L2 * torch::sin(rad2);
+
+		// 4. Posição Final da Pelve
+		auto TopPos_P = h_canela + h_coxa;
+		auto Offset_x = w_canela + w_coxa;
+
+		return {TopPos_P, Offset_x};
 	}
 
 	template<FloatingPoint T>
@@ -124,84 +127,54 @@ namespace NR
 			return q / (torch::norm(q, 2, -1, true) + 1e-7);
 		};
 
-		const float CM_TO_METERS = 0.01f;
+		constexpr float CM_TO_METERS = 0.01f;
 
-		// --- 2. EXTRAÇÃO E CONVERSÃO DE UNIDADES (CM -> SME) ---
-		// Multiplicamos os comprimentos dos ossos e posições por 0.01
-		auto L1_R = RigDesc.GetInputBoneValue(Input, "bone_l1_r") * CM_TO_METERS;
-		auto L2_R = RigDesc.GetInputBoneValue(Input, "bone_l2_r") * CM_TO_METERS;
-		auto L1_L = RigDesc.GetInputBoneValue(Input, "bone_l1_l") * CM_TO_METERS;
-		auto L2_L = RigDesc.GetInputBoneValue(Input, "bone_l2_l") * CM_TO_METERS;
+		// (CM -> SME)
+		auto L1_R = RigDesc.GetInputBoneValue(Input, "bone_l1_r");
+		auto L2_R = RigDesc.GetInputBoneValue(Input, "bone_l2_r");
+		auto L1_L = RigDesc.GetInputBoneValue(Input, "bone_l1_l");
+		auto L2_L = RigDesc.GetInputBoneValue(Input, "bone_l2_l");
 
-		// Posições e Targets (CM -> SME)
-		auto IdealFootR = RigDesc.GetInputBoneValue(Input, "foot_r_prevue", true) ;
-		auto IdealFootL = RigDesc.GetInputBoneValue(Input, "foot_l_prevue", true) ;
-		auto HipPosR_Rel = RigDesc.GetInputBoneValue(Input, "thigh_r_pos") ;
-		auto HipPosL_Rel = RigDesc.GetInputBoneValue(Input, "thigh_l_pos") ;
+		auto IdealFootR = RigDesc.GetInputBoneValue(Input, "foot_r_prevue", true);
+		auto IdealFootL = RigDesc.GetInputBoneValue(Input, "foot_l_prevue", true);
 
-		// --- 3. EXTRAÇÃO DAS PREDIÇÕES (OUTPUTS) ---
-		auto pPelvisPos = RigDesc.GetOutputBoneValue(Pred, "pelvis_pos");
-		auto pPelvisQuat = SafeNormalize(RigDesc.GetOutputBoneValue(Pred, "pelvis_quat_out"));
-
-		// Rotações das pernas
-		auto pThighR = SafeNormalize(RigDesc.GetOutputBoneValue(Pred, "thigh_r_quat_out"));
-		auto pCalfR = SafeNormalize(RigDesc.GetOutputBoneValue(Pred, "calf_r_quat_out"));
-		auto pThighL = SafeNormalize(RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out"));
-		auto pCalfL = SafeNormalize(RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out"));
-
-		// --- 4. SIMULAÇÃO DO AMBIENTE (WORLD-ISH SPACE) ---
-		auto ActualHipR = pPelvisPos + QuatRotateVector(pPelvisQuat, HipPosR_Rel);
-		auto ActualHipL = pPelvisPos + QuatRotateVector(pPelvisQuat, HipPosL_Rel);
-
-		// --- 5. PROTEÇÃO CONTRA OVERREACH (Onde o NaN morre) ---
-		auto ClampTarget = [&](torch::Tensor Hip, torch::Tensor Target, float Bone1, float Bone2) {
-			auto ToTarget = Target - Hip;
-			auto Dist = torch::norm(ToTarget, 2, -1, true);
-			float MaxReach = (Bone1 + Bone2) * 0.98f;
-			return torch::where(Dist > MaxReach, Hip + (ToTarget / (Dist + 1e-7)) * MaxReach, Target);
-		};
-
-		auto ClampedFootR = ClampTarget(ActualHipR, IdealFootR, L1_R.item<float>(), L2_R.item<float>());
-		auto ClampedFootL = ClampTarget(ActualHipL, IdealFootL, L1_L.item<float>(), L2_L.item<float>());
-
-		// --- 6. GABARITO ANALÍTICO E FK ---
-		// Solver (usando unidades em metros agora)
-		auto [AnalyticThighR, AnalyticCalfR] = SolveAnalyticIK(ActualHipR, ClampedFootR, L1_R.item<float>(), L2_R.item<float>(),
-		                                                       RigDesc.GetInputBoneValue(Input, "pri_axis_r"), RigDesc.GetInputBoneValue(Input, "sec_axis_r"),
-		                                                       SafeNormalize(RigDesc.GetInputBoneValue(Input, "PoleR_PS")));
-
-		auto [AnalyticThighL, AnalyticCalfL] = SolveAnalyticIK(ActualHipL, ClampedFootL, L1_L.item<float>(), L2_L.item<float>(),
-		                                                       RigDesc.GetInputBoneValue(Input, "pri_axis_l"), RigDesc.GetInputBoneValue(Input, "sec_axis_l"),
-		                                                       SafeNormalize(RigDesc.GetInputBoneValue(Input, "PoleL_PS")));
-
-		// Forward Kinematics para validação
-		FKResult FK_R = ForwardKinematicsChain(ActualHipR, L1_R.item<float>(), L2_R.item<float>(), pThighR, pCalfR, RigDesc.GetInputBoneValue(Input, "pri_axis_r"));
-		FKResult FK_L = ForwardKinematicsChain(ActualHipL, L1_L.item<float>(), L2_L.item<float>(), pThighL, pCalfL, RigDesc.GetInputBoneValue(Input, "pri_axis_l"));
-
-		// --- 7. CÁLCULO DAS RECOMPENSAS (LOSSES) ---
-		auto PosLoss = torch::mse_loss(FK_R.FootPos, IdealFootR) + torch::mse_loss(FK_L.FootPos, IdealFootL);
-
-		auto RotLoss = torch::mse_loss(pThighR, AnalyticThighR) + torch::mse_loss(pCalfR, AnalyticCalfR) +
-		               torch::mse_loss(pThighL, AnalyticThighL) + torch::mse_loss(pCalfL, AnalyticCalfL);
-
-		// Regularização: Penaliza se o Quat original estiver muito longe de magnitude 1.0
-		auto RegLoss = torch::pow(torch::norm(RigDesc.GetOutputBoneValue(Pred, "thigh_r_quat_out"), 2, -1) - 1.0, 2).mean() +
-		               torch::pow(torch::norm(RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out"), 2, -1) - 1.0, 2).mean();
-
-		// --- 8. AGREGAÇÃO FINAL ---
-		float w_pos = 1.0f;
-		float w_rot = 1.0f;
-		float w_reg = 0.1f;
+		auto PredQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out");
+		auto PredQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out");
 
 
-		auto TotalLoss = (PosLoss * w_pos) + (RotLoss * w_rot) + (RegLoss * w_reg);
+		std::string Message = "";
+		auto PredFootR = RigDesc.GetOutputBoneValue(Pred, "foot_r");
+		auto PredFootL = RigDesc.GetOutputBoneValue(Pred, "foot_l");
+		auto PredPelvis= RigDesc.GetOutputBoneValue(Pred, "pelvis_pos");
 
-		// Proteção Final contra propagação de NaN
-		if (torch::isnan(TotalLoss).item<bool>()) {
-			return { torch::tensor(0.0, torch::requires_grad(true)), torch::tensor(0.0), torch::tensor(0.0), torch::tensor(0.0) };
-		}
+		Message = "FootR";
+		RigDesc.Debug(Message, IdealFootR);
+		Message = "PRED: FootR";
+		RigDesc.Debug(Message, PredFootR);
 
-		return { TotalLoss, PosLoss, RotLoss, RegLoss };
+		Message = "FootL";
+		RigDesc.Debug(Message, IdealFootL);
+		Message = "PRED: FootL";
+		RigDesc.Debug(Message, PredFootL);
+
+		Message = "PRED: PredQ2";
+		RigDesc.Debug(Message, PredQ2);
+
+		auto [TopPos_P, Offset_x] = ForwardKinematicsChain(PredQ1, PredQ2, L1_R, L2_R, PredPelvis);
+
+		auto PosLossR = torch::mse_loss(PredFootR, IdealFootR);
+		auto PosLossL = torch::mse_loss(PredFootL, IdealFootL);
+
+		auto TotalPosLoss = PosLossR + PosLossL;
+
+		// Quat unit constraint
+		auto q2_norm = torch::norm(PredQ2, 2, 1);
+		auto UnitValidation = torch::mse_loss(q2_norm, torch::ones_like(q2_norm));
+
+		auto TotalLoss = (TotalPosLoss * 1.0) + (UnitValidation * 0.1f);
+
+		auto Zero = torch::tensor({0.0f}, torch::kFloat);
+		return IKLossResult(TotalLoss, TotalPosLoss, Zero, TotalLoss);
 	}
 
 	template<FloatingPoint T>

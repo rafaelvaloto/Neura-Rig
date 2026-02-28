@@ -42,8 +42,8 @@ namespace NR
 	// Retorna: foot_pos calculado(B,3)
 	struct FKResult
 	{
-		torch::Tensor FootPos;   // (B, 3)
-		torch::Tensor KneePos;  // (B, 3) - útil para regularização
+		torch::Tensor TopPos_P;   // (B, 3)
+		torch::Tensor Offset_x;  // (B, 3) - útil para regularização
 	};
 
 	struct IKLossResult
@@ -135,6 +135,11 @@ namespace NR
 				totalSize += block.FloatCount;
 			}
 			return totalSize;
+		}
+
+		void Debug(std::string& Message, const torch::Tensor& DataTensor)
+		{
+			std::cout << "[NRParse] " << Message << " => " << DataTensor << std::endl;
 		}
 	};
 

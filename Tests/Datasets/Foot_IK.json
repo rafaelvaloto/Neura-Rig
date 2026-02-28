@@ -21,19 +21,15 @@
       { "Name": "PoleR_PS",         "Space": "PS",  "Type": "vec3",  "Size": 3, "Offset": 21 },
       { "Name": "PoleL_PS",         "Space": "PS",  "Type": "vec3",  "Size": 3, "Offset": 24 },
 
-      { "Name": "pri_axis_r",      "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 27 },
-      { "Name": "pri_axis_l",      "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 30 },
-      { "Name": "sec_axis_r",      "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 33 },
-      { "Name": "sec_axis_l",      "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 36 },
-
-      { "Name": "pelvis_quat",      "Space": "WS", "Type": "quat",  "Size": 4, "Offset": 39 }
+      { "Name": "pri_axis_r",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 27 },
+      { "Name": "pri_axis_l",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 30 },
+      { "Name": "sec_axis_r",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 33 },
+      { "Name": "sec_axis_l",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 36 }
     ],
     "Targets": [
-      { "Name": "foot_r_target",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 43 },
-      { "Name": "foot_l_target",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 46 },
-      { "Name": "foot_r_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 49 },
-      { "Name": "foot_l_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 52 },
-      { "Name": "pelvis_pos",       "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 55 }
+      { "Name": "foot_r_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 39 },
+      { "Name": "foot_l_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 42 },
+      { "Name": "pelvis_pos",       "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 45 }
     ],
     "Outputs": [
       { "Name": "thigh_r_quat_out", "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 0  },

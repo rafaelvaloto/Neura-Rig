@@ -47,12 +47,12 @@ namespace NR
 		IKLossResult ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred);
 
 		FKResult ForwardKinematicsChain(
-			const torch::Tensor& ThighOffset,
-			float L1,
-			float L2,
-			const torch::Tensor& ThighQuat,
-			const torch::Tensor& CalfQuat,
-			const torch::Tensor& Axis);
+			const torch::Tensor& Q1,
+			const torch::Tensor& Q2,
+			const torch::Tensor& L1,
+			const torch::Tensor& L2,
+			const torch::Tensor& Axis
+		);
 
 
 		AnalyticResult SolveAnalyticIK(
@@ -78,7 +78,30 @@ namespace NR
 			return torch::cat({xyz, c}, 1);
 		}
 
-		torch::Tensor QuatLookAt(const torch::Tensor& SourceDir, const torch::Tensor& TargetDir) {
+
+		torch::Tensor getAngleFromQuat(const torch::Tensor& q)
+		{
+			// 1. Normaliza os quatérnios (Mantém como tensor)
+			auto Qn = NormalizeQuats(q);
+
+			// 2. Extrai os componentes usando select ou acessando as colunas
+			// Assumindo formato (B, 4) -> [w, x, y, z] ou [x, y, z, w]
+			// Ajuste os índices (0, 1, 2, 3) conforme sua convenção de quatérnio
+			auto w = Qn.select(1, 3);
+			auto x = Qn.select(1, 0);
+			auto y = Qn.select(1, 1);
+			auto z = Qn.select(1, 2);
+
+			auto sinp = 2.0f * (w * x + y * z);
+			auto cosp = 1.0f - 2.0f * (x * x + y * y);
+
+			// 3. Usa a versão do torch para atan2 (Operação vetorizada)
+			// Isso retorna um Tensor de shape (B) ou (B, 1)
+			return torch::atan2(sinp, cosp);
+		}
+
+		torch::Tensor QuatLookAt(const torch::Tensor& SourceDir, const torch::Tensor& TargetDir)
+		{
 			// Calcula o eixo de rotação (produto vetorial entre onde o osso aponta e onde deve apontar)
 			auto source = SourceDir / (torch::norm(SourceDir, 2, 1, true) + 1e-6f);
 			auto target = TargetDir / (torch::norm(TargetDir, 2, 1, true) + 1e-6f);
@@ -129,7 +152,6 @@ namespace NR
 			return v + qw * t + torch::linalg_cross(qvec, t, 1);
 		}
 
-		// --- ESPECIALISTA 1: A FÓRMULA (O PROFESSOR) ---
 		torch::Tensor GetTeacherReward(const AnalyticResult& Guide, const torch::Tensor& pThigh, const torch::Tensor& pCalf)
 		{
 			auto QuatMSE = [](torch::Tensor p, torch::Tensor g) {
