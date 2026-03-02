@@ -117,8 +117,6 @@ namespace NR
 		return {ThighFinal, CalfFinal};
 	}
 
-
-	// --- O MAESTRO (COMPUTE RL REWARD) ---
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
@@ -130,38 +128,76 @@ namespace NR
 		auto IdealFootR = RigDesc.GetInputBoneValue(Input, "foot_r_prevue", true);
 		auto IdealFootL = RigDesc.GetInputBoneValue(Input, "foot_l_prevue", true);
 
-		auto PredQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out");
-		auto PredQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out");
+		auto PredRQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_r_quat_out");
+		auto PredRQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_r_quat_out");
+
+		auto PredLQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out");
+		auto PredLQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out");
+
+		auto PredRQ3 = RigDesc.GetOutputBoneValue(Pred, "foot_r_quat_out");
+		auto PredLQ3 = RigDesc.GetOutputBoneValue(Pred, "foot_l_quat_out");
 
 		std::string Message = "";
 		auto PredFootR = RigDesc.GetOutputBoneValue(Pred, "foot_r");
 		auto PredFootL = RigDesc.GetOutputBoneValue(Pred, "foot_l");
 		auto PredPelvis= RigDesc.GetOutputBoneValue(Pred, "pelvis_pos");
 
+		std::cout << "===========FootR==========" << std::endl;
 		Message = "FootR";
 		RigDesc.Debug(Message, IdealFootR);
 		Message = "PRED: FootR";
 		RigDesc.Debug(Message, PredFootR);
 
+		Message = "PRED: PredRQ1";
+		RigDesc.Debug(Message, PredRQ1);
+
+		Message = "PRED: PredRQ2";
+		RigDesc.Debug(Message, PredRQ2);
+
+		std::cout << "===========FootL==========" << std::endl;
 		Message = "FootL";
 		RigDesc.Debug(Message, IdealFootL);
 		Message = "PRED: FootL";
 		RigDesc.Debug(Message, PredFootL);
 
-		Message = "PRED: PredQ2";
-		RigDesc.Debug(Message, PredQ2);
+		Message = "PRED: PredLQ1";
+		RigDesc.Debug(Message, PredLQ1);
 
-		auto [TopPos_P, Offset_x] = ForwardKinematicsChain(PredQ1, PredQ2, L1_R, L2_R, PredPelvis);
+		Message = "PRED: PredLQ2";
+		RigDesc.Debug(Message, PredLQ2);
+		std::cout << "==========================" << std::endl;
+
+		auto [TopPosR_P, OffsetR_x] = ForwardKinematicsChain(PredRQ1, PredRQ2, L1_R, L2_R, PredPelvis);
+		auto [TopPosL_P, OffsetL_x] = ForwardKinematicsChain(PredLQ1, PredLQ2, L1_L, L2_L, PredPelvis);
+
+
 		auto PosLossR = torch::mse_loss(PredFootR, IdealFootR);
 		auto PosLossL = torch::mse_loss(PredFootL, IdealFootL);
 
 		auto TotalPosLoss = PosLossR + PosLossL;
 
-		// Quat unit constraint
-		auto q2_norm = torch::norm(PredQ2, 2, 1);
-		auto UnitValidation = torch::mse_loss(q2_norm, torch::ones_like(q2_norm));
+		auto UnitLoss = [](at::Tensor q) {
+			auto n = torch::norm(q, 2, 1); // Shape [Batch]
+			return torch::mse_loss(n, torch::ones_like(n)); // Compara [Batch] com [Batch]
+		};
 
-		auto TotalLoss = (TotalPosLoss * 1.0) + (UnitValidation * 0.1f);
+		// Quat unit constraint
+		auto q1_r_norm = NormalizeQuats(PredRQ1);
+		auto q2_r_norm = NormalizeQuats(PredRQ2);
+		auto q3_r_norm = NormalizeQuats(PredRQ3);
+		auto q1RUnit  = UnitLoss(PredRQ1);
+		auto q2RUnit  = UnitLoss(PredRQ2);
+		auto q3RUnit  = UnitLoss(PredRQ3);
+
+		auto q1_l_norm = NormalizeQuats(PredLQ1);
+		auto q2_l_norm = NormalizeQuats(PredLQ2);
+		auto q3_l_norm = NormalizeQuats(PredLQ3);
+		auto q1LUnit  = UnitLoss(PredLQ1);
+		auto q2LUnit  = UnitLoss(PredLQ2);
+		auto q3LUnit  = UnitLoss(PredLQ3);
+
+		auto qUnit = (q1RUnit + q2RUnit + q3RUnit + q1LUnit + q2LUnit + q3LUnit);
+		auto TotalLoss = (TotalPosLoss * 5.0) + (qUnit * 0.01f);
 
 		auto Zero = torch::tensor({0.0f}, torch::kFloat);
 		return IKLossResult(TotalLoss, TotalPosLoss, Zero, TotalLoss);

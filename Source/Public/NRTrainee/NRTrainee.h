@@ -115,13 +115,13 @@ namespace NR
 
 			// Constrói o Quaternion e normaliza
 			auto q = torch::cat({cross, w}, 1);
-			return q / (torch::norm(q, 2, 1, true) + 1e-6f);
+			return q / (torch::norm(q, 2, 1, true) + 1e-8);
 		}
 
 		torch::Tensor NormalizeQuats(const torch::Tensor& q)
 		{
 			auto norm = q.norm(2, 1, true);
-			return q / (norm + 1e-8f);
+			return q / (norm + 1e-8);
 		}
 
 		// q = (x, y, z, w)
