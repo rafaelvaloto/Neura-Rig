@@ -8,167 +8,132 @@
 #include <iostream>
 #include <filesystem>
 
-class NRMLPModel : public NR::INRModel<float>
-{
-	torch::nn::Sequential Network;
-
+class NRMultiHeadModel : public NR::INRModel<float> {
 public:
-	NRMLPModel(int64_t InputSize, int64_t HiddenSize, int64_t OutputSize)
-	{
-		auto linear1 = torch::nn::Linear(InputSize, HiddenSize);
-		auto relu1 = torch::nn::ReLU();
-		auto linear2 = torch::nn::Linear(HiddenSize, HiddenSize);
-		auto relu2 = torch::nn::ReLU();
-		auto linear3 = torch::nn::Linear(HiddenSize, OutputSize);
+	torch::nn::Sequential backbone{nullptr};
+	torch::nn::Linear head_r{nullptr}, head_l{nullptr};
 
-		Network = torch::nn::Sequential(linear1, relu1, linear2, relu2, linear3);
-		register_module("Network", Network);
+	NRMultiHeadModel(int64_t in_size, int64_t hidden) {
+		backbone = register_module("backbone", torch::nn::Sequential(
+			torch::nn::Linear(in_size, hidden),
+			torch::nn::LayerNorm(torch::nn::LayerNormOptions({hidden})),
+			torch::nn::ELU(),
+			torch::nn::Linear(hidden, hidden),
+			torch::nn::ELU()
+		));
+
+		head_r = register_module("head_r", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_r)
+		head_l = register_module("head_l", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_l)
 	}
 
-	torch::Tensor Forward(torch::Tensor Input) override
-	{
-		return Network->forward(Input);
+	torch::Tensor Forward(torch::Tensor x) override {
+		auto feat = backbone->forward(x);
+		auto out_r = head_r->forward(feat);
+		auto out_l = head_l->forward(feat);
+		return torch::cat({out_r, out_l}, 1);
 	}
 
-	void SaveModel(const std::string& FilePath) override
-	{
-		torch::save(Network, FilePath);
+	void SaveModel(const std::string& FilePath) override {
+		torch::save(shared_from_this(), FilePath);
 	}
 
-	void LoadModel(const std::string& FilePath) override
-	{
-		torch::load(Network, FilePath);
+	void LoadModel(const std::string& FilePath) override {
+		torch::load(backbone, FilePath);
 	}
 };
 
 int main()
 {
-	std::cout << "PyTorch version: " << TORCH_VERSION << std::endl;
+    std::cout << "PyTorch version: " << TORCH_VERSION << std::endl;
+    std::cout << "=== NEURARIG DYNAMIC RULE TEST ===" << std::endl;
 
-	std::cout << "=== QUICK TRAINING (TRAINEE TEST) ===" << std::endl;
+	using namespace NR;
+    NRModelProfile MyBotRig;
 
-	NR::NRModelProfile MyBotRig;
-	
 	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
 	if (!std::filesystem::exists(DataAssetPath))
 	{
-		DataAssetPath = "../Tests/Datasets/Foot_IK.json";
+		DataAssetPath = "../Tests/Datasets/Foot_IK.json"; // Fallback for some build configurations
 	}
 
-	if (!NR::NRParse::LoadProfileFromJson(DataAssetPath, MyBotRig))
+	if (!NRParse::LoadProfileFromJson(DataAssetPath, MyBotRig))
 	{
 		std::cerr << "Failed to load data asset: " << DataAssetPath << std::endl;
 		return 1;
 	}
 
-	std::cout << "Profile loaded: " << MyBotRig.ProfileName << std::endl;
+    std::cout << "Profile loaded: " << MyBotRig.ProfileName << std::endl;
 
-	int32_t InSize = MyBotRig.GetRequiredInputSize(); // REVERTED TO 57 FOR TESTING
-	int32_t OutSize = MyBotRig.GetRequiredOutputSize();
+    // 2. Tamanhos automáticos baseados no JSON
+    int32_t InSize = MyBotRig.GetRequiredInputSize();   // Deve ser 14
+    int32_t OutSize = MyBotRig.GetRequiredOutputSize(); // Deve ser 6 (foot_r + foot_l)
 
-	std::cout << "Creating model..." << std::endl;
-	std::cout << "InputSize: " << InSize << " OutputSize: " << OutSize << std::endl;
-	std::cout << "DEBUG: about to create NRMLPModel" << std::endl;
-	// Inject new model in NRTrainee
-	auto model = std::make_shared<NRMLPModel>(
-	    InSize,
-	    64,
-	    OutSize);
-	std::cout << "Model created." << std::endl;
-	
-	std::cout << "Creating trainee..." << std::endl;
-	std::cout << "DEBUG: about to create NRTrainee" << std::endl;
-	NR::NRTrainee<float> trainee(model, MyBotRig, 1e-5);
-	std::cout << "Trainee created." << std::endl;
+    std::cout << "InputSize: " << InSize << " | OutputSize: " << OutSize << std::endl;
 
-	std::cout << "Starting training loop..." << std::endl;
-	std::cout << std::flush;
+    // 3. Criar Modelo e Trainee
+    auto model = std::make_shared<NRMultiHeadModel>(InSize, 512);
+    auto trainee = std::make_shared<NR::NRTrainee<float>>(model, MyBotRig, 1e-4);
 
-	try
-	{
-		int32_t InSizeReq = MyBotRig.GetRequiredInputSize();
-		int32_t TotalSize = InSizeReq;
-		
-		std::cout << "TotalSize: " << TotalSize << std::endl;
-		std::vector<float> trainingData(TotalSize, 0.0f);
+    try
+    {
+       // 4. Preparar apenas os INPUTS (14 floats)
+       std::vector<float> trainingData(InSize, 0.0f);
 
-		// Thigh R Pos (PS) - Offset 0
-		trainingData[0] = 15.0f;  // X (um pouco para a direita do centro)
+       // Mapeamento conforme seu novo JSON:
+       trainingData[0]  = 300.0f; // velocity
 
-		// Thigh L Pos (PS) - Offset 3
-		trainingData[3] = -15.0f; // X (um pouco para a esquerda do centro)
+       // Component 1 (Right Leg)
+       trainingData[1]  = 45.0f;  // bone_l1_cm1
+       trainingData[2]  = 45.0f;  // bone_l2_cm1
+       trainingData[3]  = 15.0f;  // ground_one X
+       trainingData[4]  = 0.0f;   // ground_one Y
+       trainingData[5]  = -90.0f; // ground_one Z
+       trainingData[6]  = 1.0f;   // has_hit_one (true)
 
-		// Bone Lengths - Offsets [6..9]
-		float L1 = 45.75f;
-		float L2 = 41.70f;
-		trainingData[6] = L1; // L1 R
-		trainingData[7] = L2; // L2 R
-		trainingData[8] = L1; // L1 L
-		trainingData[9] = L2; // L2 L
+       // Component 2 (Left Leg)
+       trainingData[7]  = 45.0f;  // bone_l1_cm2
+       trainingData[8]  = 45.0f;  // bone_l2_cm2
+       trainingData[9]  = -15.0f; // ground_two X
+       trainingData[10] = 0.0f;   // ground_two Y
+       trainingData[11] = -90.0f; // ground_two Z
+       trainingData[12] = 1.0f;   // has_hit_two (true)
 
-		// Ground Normals (Z up) - Offsets 10 e 14
-		trainingData[12] = 1.0f; // Normal R (Z=1)
-		trainingData[13] = 1.0f; // Has Hit R (1.0 = true)
-		trainingData[16] = 1.0f; // Normal L (Z=1)
-		trainingData[17] = 1.0f; // Has Hit L (1.0 = true)
+       // Time (delta_sec)
+       trainingData[13] = 1.5f;   // No tempo 1.5s, o pé estará em fase de Swing (no ar)
 
-		// Velocity e Pole Vector (Apontando para frente no Y) - Offsets 18 e 21
-		trainingData[19] = 0.5f; // Velocity Y
-		trainingData[21] = 1.0f; // Pole Vector Y (Joelho aponta para frente)
+       std::cout << "Data prepared. Targets will be calculated by NRRules during training." << std::endl;
 
-		// Bone Axis (O que veio do log do Unreal) - Offsets 24 e 27
-		trainingData[24] = 1.0f;  // Axis R (X=1)
-		trainingData[27] = -1.0f; // Axis L (X=-1)
+       // 5. Loop de Convergência (Overfitting num único ponto)
+       float last_loss = 0.0f;
+       for (int i = 0; i < 5000; ++i)
+       {
+          // O TrainStep agora calcula o Reward internamente usando o muParser
+          float loss = trainee->TrainStep(trainingData);
 
-		// Pelvis Quat (Identidade) - Offset 30
-		trainingData[33] = 1.0f; // W=1
+          if (i % 500 == 0) {
+              std::cout << "Epoch " << i << " | Loss: " << loss << std::endl;
+          }
 
-		// --- TARGETS ---
+          last_loss = loss;
+          if (loss <= 0.0001f) {
+             std::cout << "Convergence reached at epoch " << i << std::endl;
+             break;
+          }
+       }
 
-		// Foot Target R (PS) - Offset 34
-		// Posição no chão: mesma vertical do quadril, abaixo a uma distância L1+L2
-		trainingData[34] = 15.0f;
-		trainingData[35] = 0.0f;
-		trainingData[36] = -(L1 + L2 - 5.0f); // Z (Perna quase esticada)
+       std::cout << "Final Loss: " << last_loss << std::endl;
 
-		// Foot Target L (PS) - Offset 37
-		trainingData[37] = -15.0f;
-		trainingData[38] = 0.0f;
-		trainingData[39] = -(L1 + L2 - 5.0f);
+       // Validação
+       if (last_loss <= 0.001f) {
+          std::cout << "TEST PASSED: Model learned the procedural rule!" << std::endl;
+       } else {
+          std::cout << "TEST FAILED: Model could not converge to the rule." << std::endl;
+       }
+    }
+    catch (const std::exception& e) {
+       std::cerr << "EXCEPTION: " << e.what() << std::endl;
+       return 1;
+    }
 
-		float last_loss = 0.0f;
-		std::cout << "Data prepared. Starting loop." << std::endl;
-		for (int i = 0; i < 10000; ++i)
-		{
-			float loss = trainee.TrainStep(trainingData);
-			std::cout << "==============================" << std::endl;
-			std::cout << "Convergence loss " << last_loss << std::endl;
-			std::cout << "==============================" << std::endl;
-			last_loss = loss;
-			if (loss <= 0.0025f)
-			{
-				std::cout << "Convergence reached at epoch "  << i << std::endl;
-				break;
-			}
-		}
-
-		std::cout << std::flush;
-
-		std::cout << "Final Loss: " << last_loss << std::endl;
-		if (last_loss <= 0.0025f)
-		{
-			std::cout << "TEST PASSED: Loss decreased significantly." << std::endl;
-		}
-		else
-		{
-			std::cout << "TEST FAILED: Loss did not decrease as expected." << std::endl;
-		}
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "EXCEPTION: " << e.what() << std::endl;
-		return 1;
-	}
-
-	return 0;
+    return 0;
 }

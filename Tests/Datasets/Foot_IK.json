@@ -46,7 +46,7 @@
             "id": "stance",
             "condition": "cycle < 0.45 && velocity > 0.0",
             "offset_x": "(stride_calculation * 0.5) - ((cycle / 0.45) * stride_calculation)",
-            "offset_z": 0.0
+            "offset_z": "0.0"
           },
           {
             "id": "swing",

@@ -36,8 +36,6 @@ using namespace mu;
 
 namespace NR
 {
-	constexpr float _pi = 3.14159265358979323846f;
-
 	bool NRParse::LoadProfileFromJson(const std::string& FilePath, NRModelProfile& OutProfile)
 	{
 		std::ifstream file(FilePath);
@@ -75,15 +73,21 @@ namespace NR
 
 						// Constantes
 						for (auto& el : r["Constants"].items())
+						{
 							rule.Constants[el.key()] = el.value().is_number() ? el.value().get<double>() : 0.0;
+						}
 
 						// Variáveis (Mapeamento de nomes)
 						for (auto& el : r["Variables"].items())
+						{
 							rule.Variables[el.key()] = el.value().get<std::vector<std::string> >();
+						}
 
 						// Lógica base
 						for (auto& el : r["Logic"].items())
+						{
 							rule.Logic[el.key()] = el.value();
+						}
 
 						// Fases
 						for (const auto& p : r["Phases"])
@@ -94,7 +98,10 @@ namespace NR
 							for (auto& el : p.items())
 							{
 								if (el.key() != "id" && el.key() != "condition")
+								{
 									phase.Formulas[el.key()] = el.value();
+								}
+
 							}
 							rule.Phases.push_back(phase);
 						}
@@ -111,8 +118,10 @@ namespace NR
 						binding.BoneName = b["Name"];
 						binding.RuleName = b["Target"];
 						for (auto& el : b["Overrides"].items())
+						{
 							binding.Overrides[el.key()] = el.value();
-						OutProfile.Bindings.push_back(binding);
+							OutProfile.Bindings.push_back(binding);
+						}
 					}
 				}
 			}

@@ -20,31 +20,12 @@
 
 namespace NR
 {
-
-	enum class PacketType : uint8_t
-	{
-		RigSetup = 0x01,
-		BoneData = 0x02
-	};
-
-
-	struct FKResult
-	{
-		torch::Tensor TopPos_P;
-		torch::Tensor Offset_x;
-	};
-
 	struct IKLossResult
 	{
 		torch::Tensor TotalLoss;
 		torch::Tensor PosLoss;
 		torch::Tensor RotLoss;
 		torch::Tensor RegLoss;
-	};
-
-	struct AnalyticResult {
-		torch::Tensor ThighQuat;
-		torch::Tensor CalfQuat;
 	};
 
 	struct NRDataBlock
@@ -56,15 +37,14 @@ namespace NR
 
 	struct NRRule {
 		std::string Name;
-		std::map<std::string, float> Constants;
-		// "bone_l1" -> ["bone_l1_cm1", "bone_l1_cm2"]
+		std::map<std::string, double> Constants;
 		std::map<std::string, std::vector<std::string>> Variables;
 		std::map<std::string, std::string> Logic;
 
 		struct Phase {
 			std::string Id;
 			std::string Condition;
-			std::map<std::string, std::string> Formulas; // offset_x, offset_z, etc.
+			std::map<std::string, std::string> Formulas;
 		};
 		std::vector<Phase> Phases;
 	};
@@ -72,7 +52,7 @@ namespace NR
 	struct NRBinding {
 		std::string BoneName;
 		std::string RuleName;
-		std::map<std::string, float> Overrides;
+		std::map<std::string, double> Overrides;
 	};
 
 	struct NRModelProfile
@@ -91,6 +71,26 @@ namespace NR
 		void AddOutput(const std::string& name, int32_t size)
 		{
 			Outputs.push_back({name, size, true});
+		}
+
+		[[nodiscard]] NRRule FindRule(const std::string& name) const
+		{
+			for (const auto& rule : Rules)
+			{
+				if (rule.Name == name)
+					return rule;
+			}
+			return {};
+		}
+
+		[[nodiscard]] NRDataBlock FindOutputBlock(const std::string& name) const
+		{
+			for (const auto& block : Outputs)
+			{
+				if (block.Name == name)
+					return block;
+			}
+			return {};
 		}
 
 		[[nodiscard]] torch::Tensor GetInputBoneValue(const torch::Tensor& Input, const std::string& name) const

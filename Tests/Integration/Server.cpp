@@ -14,52 +14,6 @@
 #include <Windows.h>
 #endif
 
-void printBuffer(std::vector<float> buffer)
-{
-	// int offset = 0;
-	// for (auto Block : activeProfile.Inputs)
-	// {
-	// 	std::cout << "-----------------INPUTS----------------" << std::endl;
-	// 	std::cout << "-------------"<< offset <<"------------" << std::endl;
-	// 	if (Block.FloatCount == 4)
-	// 	{
-	// 		std::cout << Block.Name << ": x " << data[offset] << " y " << data[offset + 1] << " z " << data[offset+2] << " w " << data[offset+3] << std::endl;
-	// 	}
-	// 	else if (Block.FloatCount == 3)
-	// 	{
-	// 		std::cout << Block.Name << ": x " << data[offset] << " y " << data[offset+1] << " z " << data[offset+2] << std::endl;
-	// 	}
-	// 	else if (Block.FloatCount == 1)
-	// 	{
-	// 		std::cout << Block.Name << ": " << data[offset] << std::endl;
-	// 	}
-	// 	offset += Block.FloatCount;
-	// 	std::cout << "----------------------------------------" << std::endl;
-	// }
-
-	// int offsetT = 57;
-	// for (auto Block : activeProfile.Targets)
-	// {
-	// 	std::cout << "----------------TARGETS----------------" << std::endl;
-	// 	std::cout << "-------------"<< offsetT <<"------------" << std::endl;
-	// 	if (Block.FloatCount == 4)
-	// 	{
-	// 		std::cout << Block.Name << ": x " << data[offsetT] << " y " << data[offsetT + 1] << " z " << data[offsetT+2] << " w " << data[offsetT+3] << std::endl;
-	// 	}
-	// 	else if (Block.FloatCount == 3)
-	// 	{
-	// 		std::cout << Block.Name << ": x " << data[offsetT] << " y " << data[offsetT+1] << " z " << data[offsetT+2] << std::endl;
-	// 	}
-	// 	else if (Block.FloatCount == 1)
-	// 	{
-	// 		std::cout << Block.Name << ": " << data[offsetT] << std::endl;
-	// 	}
-	// 	offsetT += Block.FloatCount;
-	// 	std::cout << "----------------------------------------" << std::endl;
-	// }
-}
-
-// Definição corrigida do Modelo Multi-Head
 class NRMultiHeadModel : public NR::INRModel<float> {
 public:
 	torch::nn::Sequential backbone{nullptr};
@@ -108,40 +62,7 @@ public:
 	}
 };
 
-class NRMLPModel : public NR::INRModel<float>
-{
-	torch::nn::Sequential Network;
-
-public:
-	NRMLPModel(int64_t InputSize, int64_t HiddenSize, int64_t OutputSize)
-	{
-		Network = torch::nn::Sequential(
-			torch::nn::Linear(InputSize, HiddenSize),
-			torch::nn::ReLU(),
-			torch::nn::Linear(HiddenSize, HiddenSize),
-			torch::nn::ReLU(),
-			torch::nn::Linear(HiddenSize, OutputSize));
-		register_module("Network", Network);
-	}
-
-	torch::Tensor Forward(torch::Tensor Input) override
-	{
-		return Network->forward(Input);
-	}
-
-	void SaveModel(const std::string& FilePath) override
-	{
-		torch::save(Network, FilePath);
-	}
-
-	void LoadModel(const std::string& FilePath) override
-	{
-		torch::load(Network, FilePath);
-	}
-};
-
 bool saveModel = false;
-
 int main()
 {
 	using namespace NR;
@@ -232,7 +153,6 @@ int main()
 								Network.Send(sendBuffer.data(), totalPayloadSize);
 							}
 						}
-
 					}
 				}
 			}

@@ -20,6 +20,7 @@ namespace NR
 		NRRules()
 		{
 			parser.DefineFun("fmod", fmod_wrapper);
+			parser.DefineConst("_pi", 3.1415926535);
 		}
 
 
