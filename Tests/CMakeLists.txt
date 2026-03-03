@@ -30,22 +30,22 @@ foreach(TARGET_NAME NRTestServer NRTestTrain NRTestRules)
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${TORCH_DLLS}
                 $<TARGET_FILE_DIR:${TARGET_NAME}>
-                COMMENT "Copiando DLLs do Torch para ${TARGET_NAME}..."
+                COMMENT "Copy DLLs Torch from ${TARGET_NAME}..."
                 COMMAND_EXPAND_LISTS
         )
 
-        add_custom_command(TARGET NRTestRules POST_BUILD
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:muparser>" # Pega o caminho da DLL gerada pelo target muparser
-                "$<TARGET_FILE_DIR:NRTestRules>" # Pasta onde o NRTestRules.exe está
+                "$<TARGET_FILE:muparser>"
+                $<TARGET_FILE_DIR:${TARGET_NAME}>
+                COMMENT "Copy DLLs muparser from ${TARGET_NAME}..."
         )
 
-        # Copiar pasta Datasets para o diretório do executável
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/Datasets"
                 "$<TARGET_FILE_DIR:${TARGET_NAME}>/Datasets"
-                COMMENT "Copiando Datasets para o diretorio do ${TARGET_NAME}..."
+                COMMENT "Copy Datasets from ${TARGET_NAME}..."
         )
     endif()
 endforeach()
