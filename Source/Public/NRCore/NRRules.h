@@ -14,13 +14,12 @@ namespace NR
 	class NRRules
 	{
 	public:
-		std::map<std::string, float> Vars;
+		std::map<std::string, double> Vars;
 		mu::Parser parser;
 
 		NRRules()
 		{
 			parser.DefineFun("fmod", fmod_wrapper);
-			parser.DefineConst("PI", 3.14159265f);
 		}
 
 
@@ -28,12 +27,12 @@ namespace NR
 		{
 			for (auto const& [name, val] : rule.Constants)
 			{
-				Vars[name] = static_cast<float>(val);
+				Vars[name] = val;
 			}
 
 			for (auto const& [name, val] : binding.Overrides)
 			{
-				Vars[name] = static_cast<float>(val);
+				Vars[name] = val;
 			}
 
 			// Inject Tensor Inputs
@@ -47,7 +46,7 @@ namespace NR
 
 			for (auto& [name, val] : Vars)
 			{
-				parser.DefineVar(name, reinterpret_cast<mu::value_type*>(&val));
+				parser.DefineVar(name, &val);
 			}
 		}
 

@@ -24,8 +24,12 @@ int main() {
 
     // 2. Setup do Parser (Vincular endereços)
     for (auto& [name, val] : evaluator.Vars) {
-        evaluator.parser.DefineVar(name, reinterpret_cast<mu::value_type*>(&val));
+        evaluator.parser.DefineVar(name, &val);
     }
+
+	// Logo após o loop do DefineVar no main:
+	evaluator.Vars["delta"] = 99.0f;
+	std::cout << "DEBUG: Valor de delta no parser: " << evaluator.Eval("delta") << std::endl;
 
     // 3. Definição das Strings de Lógica (Exatamente como no seu JSON)
     std::string stride_logic   = "min(velocity * gain, min((bone_l1 + bone_l2) * 1.2, limit))";
