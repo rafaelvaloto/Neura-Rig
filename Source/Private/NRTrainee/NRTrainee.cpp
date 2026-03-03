@@ -19,7 +19,7 @@ namespace NR
 	template<FloatingPoint T>
 	float NRTrainee<T>::TrainStep(const std::vector<float>& InputFloats)
 	{
-		int32_t InCount = RigDesc.GetRequiredInputSize() + RigDesc.GetRequiredTargetsSize();
+		int32_t InCount = RigDesc.GetRequiredInputSize();
 		int32_t BatchSize = static_cast<int32_t>(InputFloats.size()) / InCount;
 
 		auto options = torch::TensorOptions().dtype(torch::kFloat).device(torch::kCPU);
@@ -61,86 +61,19 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	AnalyticResult NRTrainee<T>::SolveAnalyticIK(
-		const torch::Tensor& HipPos,
-		const torch::Tensor& TargetPos,
-		float L1,
-		float L2,
-		const torch::Tensor& Axis,
-		const torch::Tensor& Axis2,
-		const torch::Tensor& PoleVec)
-	{
-		auto ToTarget = TargetPos - HipPos;
-		auto Dist = torch::norm(ToTarget, 2, 1, true);
-
-		// Clamp para evitar triângulos impossíveis
-		auto D = torch::clamp(Dist, std::abs(L1 - L2) + 1e-2f, (L1 + L2) - 1e-2f);
-		auto TargetDir = ToTarget / (D + 1e-6f);
-
-		// 2. Lei dos Cossenos (Mantendo [B, 1])
-		auto CosB = (L1 * L1 + L2 * L2 - D.pow(2)) / (2.0f * L1 * L2);
-		auto AngleB = torch::acos(torch::clamp(CosB, -1.0f, 1.0f));
-
-		auto CosA = (L1 * L1 + D.pow(2) - L2 * L2) / (2.0f * L1 * D);
-		auto AngleA = torch::acos(torch::clamp(CosA, -1.0f, 1.0f));
-
-		// 3. Base Ortonormal
-		auto RightVec = torch::linalg_cross(TargetDir, Axis2);
-		auto Mag = torch::norm(RightVec, 2, 1, true);
-
-		// Fallback para evitar divisão por zero se o alvo estiver na linha do Pole
-		auto UpVector = torch::tensor({0.0f, 1.0f, 0.0f}, TargetDir.options()).expand_as(TargetDir);
-		auto FallbackRight = torch::linalg_cross(TargetDir, UpVector);
-
-		auto BendAxis = torch::where(Mag > 1e-4f,
-		                             RightVec / (Mag + 1e-6f),
-		                             FallbackRight / (torch::norm(FallbackRight, 2, 1, true) + 1e-6f));
-
-		// 4. Coxa (Thigh) - Uso de B_Axis para garantir consistência
-		auto IsNegativePrimary = Axis2.select(1, 0) < 0; // Resultado: [Batch]
-
-		// Invertemos o TargetDir se o eixo principal for negativo (ex: perna esquerda)
-		auto AdjustedTargetDir = torch::where(IsNegativePrimary.unsqueeze(1), -TargetDir, TargetDir);
-		auto LookAtQuat = QuatLookAt(Axis2, AdjustedTargetDir);
-
-		// 5. Joelho (Calf) - Tratando Secondary Axis
-		auto IsNegativeSecondary = Axis2.select(1, 1) < 0; // [Batch]
-
-		// CORREÇÃO: Usamos a máscara expandida em vez de squeeze/unsqueeze instáveis
-		auto FinalAngleA = torch::where(IsNegativeSecondary.unsqueeze(1), -AngleA, AngleA);
-		auto FinalAngleB = torch::where(IsNegativeSecondary.unsqueeze(1), -AngleB, AngleB);
-
-		auto RotatorA = QuatFromAxisAngle(BendAxis, FinalAngleA);
-		auto ThighFinal = NormalizeQuats(QuatMultiply(RotatorA, LookAtQuat));
-		auto CalfFinal = QuatFromAxisAngle(Axis2, FinalAngleB);
-
-		return {ThighFinal, CalfFinal};
-	}
-
-	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
-		auto L1_R = RigDesc.GetInputBoneValue(Input, "bone_l1_r");
-		auto L2_R = RigDesc.GetInputBoneValue(Input, "bone_l2_r");
-		auto L1_L = RigDesc.GetInputBoneValue(Input, "bone_l1_l");
-		auto L2_L = RigDesc.GetInputBoneValue(Input, "bone_l2_l");
+		auto L1_cm1 = RigDesc.GetInputBoneValue(Input, "bone_l1_cm1_one");
+		auto L2_cm1 = RigDesc.GetInputBoneValue(Input, "bone_l2_cm1_two");
+		auto L1_cm2 = RigDesc.GetInputBoneValue(Input, "bone_l1_cm2_one");
+		auto L2_cm2 = RigDesc.GetInputBoneValue(Input, "bone_l2_cm2_two");
 
-		auto IdealFootR = RigDesc.GetInputBoneValue(Input, "foot_r_prevue", true);
-		auto IdealFootL = RigDesc.GetInputBoneValue(Input, "foot_l_prevue", true);
-
-		auto PredRQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_r_quat_out");
-		auto PredRQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_r_quat_out");
-
-		auto PredLQ1 = RigDesc.GetOutputBoneValue(Pred, "thigh_l_quat_out");
-		auto PredLQ2 = RigDesc.GetOutputBoneValue(Pred, "calf_l_quat_out");
-
-		auto PredRQ3 = RigDesc.GetOutputBoneValue(Pred, "foot_r_quat_out");
-		auto PredLQ3 = RigDesc.GetOutputBoneValue(Pred, "foot_l_quat_out");
+		auto IdealFootR = torch::tensor({0.0f, 0.0f, 0.0f}, torch::kFloat);
+		auto IdealFootL = torch::tensor({0.0f, 0.0f, 0.0f}, torch::kFloat);
 
 		std::string Message = "";
-		auto PredFootR = RigDesc.GetOutputBoneValue(Pred, "foot_r");
-		auto PredFootL = RigDesc.GetOutputBoneValue(Pred, "foot_l");
-		auto PredPelvis= RigDesc.GetOutputBoneValue(Pred, "pelvis_pos");
+		auto PredFootR = RigDesc.GetOutputBoneValue(Pred, "bone_vec1_one");
+		auto PredFootL = RigDesc.GetOutputBoneValue(Pred, "bone_vec2_one");
 
 		std::cout << "===========FootR==========" << std::endl;
 		Message = "FootR";
@@ -148,27 +81,12 @@ namespace NR
 		Message = "PRED: FootR";
 		RigDesc.Debug(Message, PredFootR);
 
-		Message = "PRED: PredRQ1";
-		RigDesc.Debug(Message, PredRQ1);
-
-		Message = "PRED: PredRQ2";
-		RigDesc.Debug(Message, PredRQ2);
-
 		std::cout << "===========FootL==========" << std::endl;
 		Message = "FootL";
 		RigDesc.Debug(Message, IdealFootL);
 		Message = "PRED: FootL";
 		RigDesc.Debug(Message, PredFootL);
-
-		Message = "PRED: PredLQ1";
-		RigDesc.Debug(Message, PredLQ1);
-
-		Message = "PRED: PredLQ2";
-		RigDesc.Debug(Message, PredLQ2);
 		std::cout << "==========================" << std::endl;
-
-		auto [TopPosR_P, OffsetR_x] = ForwardKinematicsChain(PredRQ1, PredRQ2, L1_R, L2_R, PredPelvis);
-		auto [TopPosL_P, OffsetL_x] = ForwardKinematicsChain(PredLQ1, PredLQ2, L1_L, L2_L, PredPelvis);
 
 
 		auto PosLossR = torch::mse_loss(PredFootR, IdealFootR);
@@ -182,24 +100,22 @@ namespace NR
 		};
 
 		// Quat unit constraint
-		auto q1_r_norm = NormalizeQuats(PredRQ1);
-		auto q2_r_norm = NormalizeQuats(PredRQ2);
-		auto q3_r_norm = NormalizeQuats(PredRQ3);
-		auto q1RUnit  = UnitLoss(PredRQ1);
-		auto q2RUnit  = UnitLoss(PredRQ2);
-		auto q3RUnit  = UnitLoss(PredRQ3);
-
-		auto q1_l_norm = NormalizeQuats(PredLQ1);
-		auto q2_l_norm = NormalizeQuats(PredLQ2);
-		auto q3_l_norm = NormalizeQuats(PredLQ3);
-		auto q1LUnit  = UnitLoss(PredLQ1);
-		auto q2LUnit  = UnitLoss(PredLQ2);
-		auto q3LUnit  = UnitLoss(PredLQ3);
-
-		auto qUnit = (q1RUnit + q2RUnit + q3RUnit + q1LUnit + q2LUnit + q3LUnit);
-		auto TotalLoss = (TotalPosLoss * 5.0) + (qUnit * 0.01f);
+		// auto q1_r_norm = NormalizeQuats(PredRQ1);
+		// auto q2_r_norm = NormalizeQuats(PredRQ2);
+		// auto q3_r_norm = NormalizeQuats(PredRQ3);
+		// auto q1RUnit  = UnitLoss(PredRQ1);
+		// auto q2RUnit  = UnitLoss(PredRQ2);
+		// auto q3RUnit  = UnitLoss(PredRQ3);
+		//
+		// auto q1_l_norm = NormalizeQuats(PredLQ1);
+		// auto q2_l_norm = NormalizeQuats(PredLQ2);
+		// auto q3_l_norm = NormalizeQuats(PredLQ3);
+		// auto q1LUnit  = UnitLoss(PredLQ1);
+		// auto q2LUnit  = UnitLoss(PredLQ2);
+		// auto q3LUnit  = UnitLoss(PredLQ3);
 
 		auto Zero = torch::tensor({0.0f}, torch::kFloat);
+		auto TotalLoss = (TotalPosLoss * 5.0) + (Zero * 0.01f);
 		return IKLossResult(TotalLoss, TotalPosLoss, Zero, TotalLoss);
 	}
 

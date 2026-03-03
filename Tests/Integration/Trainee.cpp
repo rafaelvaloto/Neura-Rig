@@ -63,7 +63,7 @@ int main()
 
 	std::cout << "Profile loaded: " << MyBotRig.ProfileName << std::endl;
 
-	int32_t InSize = MyBotRig.GetRequiredInputSize() + MyBotRig.GetRequiredTargetsSize(); // REVERTED TO 57 FOR TESTING
+	int32_t InSize = MyBotRig.GetRequiredInputSize(); // REVERTED TO 57 FOR TESTING
 	int32_t OutSize = MyBotRig.GetRequiredOutputSize();
 
 	std::cout << "Creating model..." << std::endl;
@@ -87,8 +87,7 @@ int main()
 	try
 	{
 		int32_t InSizeReq = MyBotRig.GetRequiredInputSize();
-		int32_t TarSizeReq = MyBotRig.GetRequiredTargetsSize();
-		int32_t TotalSize = InSizeReq + TarSizeReq;
+		int32_t TotalSize = InSizeReq;
 		
 		std::cout << "TotalSize: " << TotalSize << std::endl;
 		std::vector<float> trainingData(TotalSize, 0.0f);

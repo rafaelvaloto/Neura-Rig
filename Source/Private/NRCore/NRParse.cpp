@@ -6,6 +6,10 @@
 #include <fstream>
 #include <iostream>
 
+#ifdef MUP_STRING_TYPE
+#define MUP_STRING_TYPE std::string
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4244)
 #pragma warning(disable : 4267)
@@ -15,75 +19,108 @@
 #include <nlohmann/json.hpp>
 #pragma warning(pop)
 
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244) // Desativa o aviso de conversão de dados
+#endif
+
+#include "muParser.h"
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 using json = nlohmann::json;
+using namespace mu;
 
 namespace NR
 {
+	constexpr float _pi = 3.14159265358979323846f;
+
 	bool NRParse::LoadProfileFromJson(const std::string& FilePath, NRModelProfile& OutProfile)
 	{
 		std::ifstream file(FilePath);
+
 		if (!file.is_open())
-		{
-			std::cerr << "[NeuraRig] Erro: Nao foi possivel abrir o arquivo: " << FilePath << std::endl;
 			return false;
-		}
 
 		try
 		{
-			// Faz o parse do ficheiro para um objecto JSON
 			json j;
 			file >> j;
+			OutProfile.ProfileName = j.value("Profile", "Unknown");
 
-			// Extrai o nome do profile
-			OutProfile.ProfileName = j.value("Profile", "Unknown_Profile");
 			if (j.contains("Schema"))
 			{
 				auto schema = j["Schema"];
 
-				// Popula Inputs
-				if (schema.contains("Inputs"))
+				// --- INPUTS & OUTPUTS (Já existentes) ---
+				for (const auto& item : schema["Inputs"])
 				{
-					for (const auto& item : schema["Inputs"])
+					OutProfile.Inputs.push_back({item["Name"], item["Offset"], item["Size"]});
+				}
+				for (const auto& item : schema["Outputs"])
+				{
+					OutProfile.Outputs.push_back({item["Name"], item["Offset"], item["Size"]});
+				}
+
+				// --- RULES ---
+				if (schema.contains("Rules"))
+				{
+					for (const auto& r : schema["Rules"])
 					{
-						NRDataBlock block;
-						block.Name = item.value("Name", "Unknown_Input");
-						block.FloatCount = item.value("Size", 1);
-						block.Offset = item.value("Offset", 1);
-						OutProfile.Inputs.push_back(block);
+						NRRule rule;
+						rule.Name = r["Name"];
+
+						// Constantes
+						for (auto& el : r["Constants"].items())
+							rule.Constants[el.key()] = el.value().is_number() ? el.value().get<double>() : 0.0;
+
+						// Variáveis (Mapeamento de nomes)
+						for (auto& el : r["Variables"].items())
+							rule.Variables[el.key()] = el.value().get<std::vector<std::string> >();
+
+						// Lógica base
+						for (auto& el : r["Logic"].items())
+							rule.Logic[el.key()] = el.value();
+
+						// Fases
+						for (const auto& p : r["Phases"])
+						{
+							NRRule::Phase phase;
+							phase.Id = p["id"];
+							phase.Condition = p["condition"];
+							for (auto& el : p.items())
+							{
+								if (el.key() != "id" && el.key() != "condition")
+									phase.Formulas[el.key()] = el.value();
+							}
+							rule.Phases.push_back(phase);
+						}
+						OutProfile.Rules.push_back(rule);
 					}
 				}
 
-				// Popula Targets
-				if (schema.contains("Targets"))
+				// --- BINDINGS ---
+				if (schema.contains("Bindings"))
 				{
-					for (const auto& item : schema["Targets"])
+					for (const auto& b : schema["Bindings"])
 					{
-						NRDataBlock block;
-						block.Name = item.value("Name", "Unknown_Output");
-						block.FloatCount = item.value("Size", 1);
-						block.Offset = item.value("Offset", 1);
-						OutProfile.Targets.push_back(block);
-					}
-				}
-
-				// Popula Outputs
-				if (schema.contains("Outputs"))
-				{
-					for (const auto& item : schema["Outputs"])
-					{
-						NRDataBlock block;
-						block.Name = item.value("Name", "Unknown_Output");
-						block.FloatCount = item.value("Size", 1);
-						block.Offset = item.value("Offset", 1);
-						OutProfile.Outputs.push_back(block);
+						NRBinding binding;
+						binding.BoneName = b["Name"];
+						binding.RuleName = b["Target"];
+						for (auto& el : b["Overrides"].items())
+							binding.Overrides[el.key()] = el.value();
+						OutProfile.Bindings.push_back(binding);
 					}
 				}
 			}
 			return true;
 		}
-		catch (const json::exception& e)
+		catch (std::exception& e)
 		{
-			std::cerr << "[NeuraRig] Erro de formatacao no JSON: " << e.what() << std::endl;
+			std::cerr << "Erro no JSON: " << e.what() << std::endl;
 			return false;
 		}
 	}

@@ -11,10 +11,14 @@ if(POLICY CMP0048)
 endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-# --- LIBTORCH (3rdParty) ---
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/libtorch")
+set(ENABLE_SAMPLES OFF CACHE BOOL "Desativa exemplos do muParser" FORCE)
+set(ENABLE_OPENMP OFF CACHE BOOL "Desativa OpenMP no muParser" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Desativa testes globais" FORCE)
 
+# --- (3rdParty) ---
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/libtorch")
 add_subdirectory(3rdParty/json)
+add_subdirectory(3rdParty/muparser)
 
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")

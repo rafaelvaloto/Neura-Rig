@@ -6,6 +6,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
+#include "muParser.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4244)
@@ -18,10 +20,6 @@
 
 namespace NR
 {
-	struct NRVector3D
-	{
-		float x, y, z;
-	};
 
 	enum class PacketType : uint8_t
 	{
@@ -29,21 +27,11 @@ namespace NR
 		BoneData = 0x02
 	};
 
-	// Define o que é cada pedaço do seu pacote UDP
-	struct NRDataBlock
-	{
-		std::string Name;
-		int32_t Offset;
-		int32_t FloatCount;
-	};
 
-	// Forward Kinematics de uma chain de 2 bones
-	// Recebe: hip_pos(B,3), bone_lengths(L1, L2), 3 quats(B,4 cada)
-	// Retorna: foot_pos calculado(B,3)
 	struct FKResult
 	{
-		torch::Tensor TopPos_P;   // (B, 3)
-		torch::Tensor Offset_x;  // (B, 3) - útil para regularização
+		torch::Tensor TopPos_P;
+		torch::Tensor Offset_x;
 	};
 
 	struct IKLossResult
@@ -59,28 +47,65 @@ namespace NR
 		torch::Tensor CalfQuat;
 	};
 
-	// O seu novo "Template" de Configuração
+	struct NRDataBlock
+	{
+		std::string Name;
+		int32_t Offset;
+		int32_t FloatCount;
+	};
+
+	struct NRRule {
+		std::string Name;
+		std::map<std::string, float> Constants;
+		// "bone_l1" -> ["bone_l1_cm1", "bone_l1_cm2"]
+		std::map<std::string, std::vector<std::string>> Variables;
+		std::map<std::string, std::string> Logic;
+
+		struct Phase {
+			std::string Id;
+			std::string Condition;
+			std::map<std::string, std::string> Formulas; // offset_x, offset_z, etc.
+		};
+		std::vector<Phase> Phases;
+	};
+
+	struct NRBinding {
+		std::string BoneName;
+		std::string RuleName;
+		std::map<std::string, float> Overrides;
+	};
+
 	struct NRModelProfile
 	{
-		std::string ProfileName; // Ex: "Locomotion_LowerBody"
+		std::string ProfileName;
+		std::vector<NRRule> Rules;
+		std::vector<NRBinding> Bindings;
 		std::vector<NRDataBlock> Inputs;
-		std::vector<NRDataBlock> Targets;
 		std::vector<NRDataBlock> Outputs;
 
-		torch::Tensor GetInputBoneValue(const torch::Tensor& Input, const std::string& name, bool isTarget = false) const
+		void AddInput(const std::string& name, int32_t size)
 		{
-			std::vector<NRDataBlock> DataBlocks = isTarget ? Targets : Inputs;
-			for (const auto& block : DataBlocks)
+			Inputs.push_back({name, size, false});
+		}
+
+		void AddOutput(const std::string& name, int32_t size)
+		{
+			Outputs.push_back({name, size, true});
+		}
+
+		[[nodiscard]] torch::Tensor GetInputBoneValue(const torch::Tensor& Input, const std::string& name) const
+		{
+			for (const auto& block : Inputs)
 			{
 				if (block.Name == name)
 				{
 					return Input.slice(1, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor();
+			return torch::Tensor(nullptr);
 		}
 
-		torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const
+		[[nodiscard]] torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const
 		{
 			for (const auto& block : Outputs)
 			{
@@ -89,38 +114,13 @@ namespace NR
 					return Output.slice(1, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor();
-		}
-
-		void AddInput(const std::string& name, int32_t size)
-		{
-			Inputs.push_back({name, size, false});
-		}
-
-		void AddTarget(const std::string& name, int32_t size)
-		{
-			Targets.push_back({name, size, false});
-		}
-
-		void AddOutput(const std::string& name, int32_t size)
-		{
-			Outputs.push_back({name, size, true});
+			return torch::Tensor(nullptr);
 		}
 
 		[[nodiscard]] int32_t GetRequiredInputSize() const
 		{
 			int32_t totalSize = 0;
 			for (const auto& block : Inputs)
-			{
-				totalSize += block.FloatCount;
-			}
-			return totalSize;
-		}
-
-		[[nodiscard]] int32_t GetRequiredTargetsSize() const
-		{
-			int32_t totalSize = 0;
-			for (const auto& block : Targets)
 			{
 				totalSize += block.FloatCount;
 			}
@@ -137,12 +137,10 @@ namespace NR
 			return totalSize;
 		}
 
-		void Debug(std::string& Message, const torch::Tensor& DataTensor)
+		static void Debug(const std::string& Message, const torch::Tensor& DataTensor)
 		{
 			std::cout << "[NRParse] " << Message << " => " << DataTensor << std::endl;
 		}
 	};
-
-
 
 } // namespace NR

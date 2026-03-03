@@ -3,45 +3,64 @@
   "Version": 3,
   "Schema": {
     "Inputs": [
-      { "Name": "thigh_r_pos",      "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 0  },
-      { "Name": "thigh_l_pos",      "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 3  },
+      { "Name": "velocity",           "Space": "-",  "Type": "float", "Size": 1, "Offset": 0 },
 
-      { "Name": "bone_l1_r",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 6  },
-      { "Name": "bone_l2_r",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 7  },
-      { "Name": "bone_l1_l",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 8  },
-      { "Name": "bone_l2_l",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 9  },
+      { "Name": "bone_l1_cm1",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 1 },
+      { "Name": "bone_l2_cm1",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 2 },
+      { "Name": "ground_one",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 3 },
+      { "Name": "has_hit_one",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 6 },
 
-      { "Name": "ground_r",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 10 },
-      { "Name": "has_hit_r",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 13 },
-      { "Name": "ground_l",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 14 },
-      { "Name": "has_hit_l",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 17 },
+      { "Name": "bone_l1_cm2",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 7  },
+      { "Name": "bone_l2_cm2",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 8  },
+      { "Name": "ground_two",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 9  },
+      { "Name": "has_hit_two",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 12 },
 
-      { "Name": "velocity",         "Space": "-",   "Type": "vec3",  "Size": 3, "Offset": 18 },
-
-      { "Name": "PoleR_PS",         "Space": "PS",  "Type": "vec3",  "Size": 3, "Offset": 21 },
-      { "Name": "PoleL_PS",         "Space": "PS",  "Type": "vec3",  "Size": 3, "Offset": 24 },
-
-      { "Name": "pri_axis_r",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 27 },
-      { "Name": "pri_axis_l",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 30 },
-      { "Name": "sec_axis_r",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 33 },
-      { "Name": "sec_axis_l",       "Space": "-",  "Type": "vec3",  "Size": 3, "Offset": 36 }
+      { "Name": "delta_sec",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 13 }
     ],
-    "Targets": [
-      { "Name": "foot_r_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 39 },
-      { "Name": "foot_l_prevue",    "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 42 },
-      { "Name": "pelvis_pos",       "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 45 }
+    "Bindings": [
+      { "Name": "foot_r", "Target": "Humanoid_Foot_Curve", "Overrides": {"offset": 0.0}},
+      { "Name": "foot_l", "Target": "Humanoid_Foot_Curve", "Overrides": {"offset": 0.5}}
+    ],
+    "Rules": [
+      {
+        "Name": "Humanoid_Foot_Curve",
+        "Constants": {
+          "gain": 1.2,
+          "frequency": 0.5,
+          "limit": 120.0
+        },
+        "Variables": {
+          "offset": ["offset"],
+          "delta" : ["delta_sec"],
+          "velocity": ["velocity"],
+          "bone_l1" : ["bone_l1_cm1", "bone_l1_cm2"],
+          "bone_l2" : ["bone_l2_cm1", "bone_l2_cm2"]
+        },
+        "Logic": {
+          "stride_calculation": "min(velocity * gain, (bone_l1 + bone_l2) * 1.2, limit)",
+          "cycle": "fmod((delta * frequency) + offset, 1.0)",
+          "height": "min(bone_l2 * 0.6, 25.0)"
+        },
+        "Phases": [
+          {
+            "id": "stance",
+            "condition": "cycle < 0.45 && velocity > 0.0",
+            "offset_x": "(stride_calculation * 0.5) - ((cycle / 0.45) * stride_calculation)",
+            "offset_z": 0.0
+          },
+          {
+            "id": "swing",
+            "condition": "cycle >= 0.45 && velocity > 0.0",
+            "progress": "(cycle - 0.45) / 0.55",
+            "offset_x": "-(stride_calculation * 0.5) + (progress * stride_calculation)",
+            "offset_z": "height * sin(_pi * progress)"
+          }
+        ]
+      }
     ],
     "Outputs": [
-      { "Name": "thigh_r_quat_out", "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 0  },
-      { "Name": "calf_r_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 4  },
-      { "Name": "foot_r_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 8  },
-      { "Name": "thigh_l_quat_out", "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 12 },
-      { "Name": "calf_l_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 16 },
-      { "Name": "foot_l_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 20 },
-      { "Name": "pelvis_quat_out",  "Space": "LS", "Type": "quat",  "Size": 4, "Offset": 24 },
-      { "Name": "foot_r",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 28 },
-      { "Name": "foot_l",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 31 },
-      { "Name": "pelvis_pos",       "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 34 }
+      { "Name": "foot_r",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 0 },
+      { "Name": "foot_l",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 3 }
     ]
   }
 }

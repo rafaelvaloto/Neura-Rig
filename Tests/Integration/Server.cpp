@@ -164,10 +164,9 @@ int main()
 	std::cout << "----------------------------------" << std::endl;
 	std::cout << "Profile loaded: " << activeProfile.ProfileName << std::endl;
 	std::cout << " -> Input Size: " << activeProfile.GetRequiredInputSize() << std::endl;
-	std::cout << " -> Targets Size: " << activeProfile.GetRequiredTargetsSize() << std::endl;
 	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
 
-	auto InputSize = activeProfile.GetRequiredInputSize() + activeProfile.GetRequiredTargetsSize();
+	auto InputSize = activeProfile.GetRequiredInputSize();
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512);
 	std::cout << "Model created!" << std::endl;
 

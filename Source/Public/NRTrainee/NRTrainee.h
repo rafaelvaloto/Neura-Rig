@@ -54,15 +54,6 @@ namespace NR
 			const torch::Tensor& Axis
 		);
 
-
-		AnalyticResult SolveAnalyticIK(
-			const torch::Tensor& HipPos,
-			const torch::Tensor& TargetPos,
-			float L1, float L2,
-			const torch::Tensor& Axis,
-			const torch::Tensor& Axis2,
-			const torch::Tensor& PoleVec);
-
 		torch::Tensor QuatFromAxisAngle(const torch::Tensor& Axis, const torch::Tensor& Angle)
 		{
 			auto angleReshaped = Angle.view({-1, 1});

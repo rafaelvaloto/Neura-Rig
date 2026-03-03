@@ -3,7 +3,7 @@
 // All rights reserved.
 #pragma once
 
-#include "NRCore/NRConcepts.h"
+#include "NRCore/NRCore.h"
 #include "NRCore/NRTypes.h"
 
 namespace NR
