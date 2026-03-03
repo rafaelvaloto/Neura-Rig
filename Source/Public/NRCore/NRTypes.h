@@ -77,8 +77,7 @@ namespace NR
 		{
 			for (const auto& rule : Rules)
 			{
-				if (rule.Name == name)
-					return rule;
+				if (rule.Name == name) return rule;
 			}
 			return {};
 		}
@@ -99,10 +98,12 @@ namespace NR
 			{
 				if (block.Name == name)
 				{
-					return Input.slice(1, block.Offset, block.Offset + block.FloatCount);
+					// Se o tensor for 2D (Batch), corta na dim 1. Se for 1D (Single), corta na 0.
+					int64_t dimToSlice = (Input.dim() > 1) ? 1 : 0;
+					return Input.slice(dimToSlice, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor(nullptr);
+			return torch::Tensor(); // Retorna vazio se não achar o nome
 		}
 
 		[[nodiscard]] torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const
@@ -111,10 +112,11 @@ namespace NR
 			{
 				if (block.Name == name)
 				{
-					return Output.slice(1, block.Offset, block.Offset + block.FloatCount);
+					int64_t dim = (Output.dim() > 1) ? 1 : 0;
+					return Output.slice(dim, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor(nullptr);
+			return torch::Tensor();
 		}
 
 		[[nodiscard]] int32_t GetRequiredInputSize() const

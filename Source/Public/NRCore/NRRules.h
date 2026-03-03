@@ -42,12 +42,25 @@ namespace NR
 				std::string actualInputName = (inputList.size() > bindingIndex) ? inputList[bindingIndex] : inputList[0];
 
 				torch::Tensor val = profile.GetInputBoneValue(inputTensor, actualInputName);
-				Vars[varName] = val.item<float>();
+
+				if (val.defined() && val.numel() > 0)
+				{
+					Vars[varName] = val.item<float>();
+				}
+				else
+				{
+					std::cerr << "[NeuraRig] ERRO: O input '" << actualInputName
+							  << "' definido na regra nao foi encontrado no Schema de Inputs do JSON!" << std::endl;
+					Vars[varName] = 0.0; // Valor padrão para evitar crash
+				}
 			}
 
 			for (auto& [name, val] : Vars)
 			{
-				parser.DefineVar(name, &val);
+				if (parser.GetVar().find(name) == parser.GetVar().end())
+				{
+					parser.DefineVar(name, &val);
+				}
 			}
 		}
 
@@ -56,12 +69,25 @@ namespace NR
 			try
 			{
 				parser.SetExpr(expression);
-				return static_cast<float>(parser.Eval());
+				float result = static_cast<float>(parser.Eval());
+
+				// Atualizar variáveis no parser caso tenham sido modificadas (embora DefineVar deva cuidar disso)
+				// Em muParser, variáveis ligadas por ponteiro são atualizadas automaticamente.
+				return result;
 			}
 			catch (mu::Parser::exception_type& e)
 			{
-				std::cout << "Error evaluating expression: " << e.GetMsg() << std::endl;
+				std::cout << "Error evaluating expression [" << expression << "]: " << e.GetMsg() << std::endl;
 				return 0.0f;
+			}
+		}
+		
+		void DefineVariable(const std::string& name, double initialValue = 0.0)
+		{
+			Vars[name] = initialValue;
+			if (parser.GetVar().find(name) == parser.GetVar().end())
+			{
+				parser.DefineVar(name, &Vars[name]);
 			}
 		}
 	};

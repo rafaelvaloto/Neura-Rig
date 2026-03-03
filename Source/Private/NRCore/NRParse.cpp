@@ -120,8 +120,8 @@ namespace NR
 						for (auto& el : b["Overrides"].items())
 						{
 							binding.Overrides[el.key()] = el.value();
-							OutProfile.Bindings.push_back(binding);
 						}
+						OutProfile.Bindings.push_back(binding);
 					}
 				}
 			}

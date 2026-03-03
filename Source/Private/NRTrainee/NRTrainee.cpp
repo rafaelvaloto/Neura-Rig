@@ -46,7 +46,7 @@ namespace NR
 
 		for (int64_t b = 0; b < batchSize; ++b)
 		{
-			torch::Tensor currentInput = Input.select(0, b); // Pega um item do batch
+			torch::Tensor currentInput = Input[b]; // Pega a linha b (1D: [InCount])
 
 			// Process bindings (foot_r, foot_l)
 			for (int i = 0; i < RigDesc.Bindings.size(); ++i)
@@ -60,6 +60,11 @@ namespace NR
 				// "Logic" (stride -> cycle -> height)
 				for (auto const& [name, expr] : rule.Logic)
 				{
+					Evaluator.DefineVariable(name);
+				}
+
+				for (auto const& [name, expr] : rule.Logic)
+				{
 					Evaluator.Vars[name] = Evaluator.Eval(expr);
 				}
 
@@ -69,11 +74,22 @@ namespace NR
 
 				for (auto const& phase : rule.Phases)
 				{
+					// Register formulas before available condition
+					for (auto const& [name, expr] : phase.Formulas)
+					{
+						Evaluator.DefineVariable(name);
+					}
+
 					// Condition (ex: cycle < 0.45)
 					if (Evaluator.Eval(phase.Condition) > 0.5f)
 					{
-						finalOffX = Evaluator.Eval(phase.Formulas.at("offset_x"));
-						finalOffZ = Evaluator.Eval(phase.Formulas.at("offset_z"));
+						for (auto const& [name, expr] : phase.Formulas)
+						{
+							Evaluator.Vars[name] = Evaluator.Eval(expr);
+						}
+
+						finalOffX = static_cast<float>(Evaluator.Vars.at("offset_x"));
+						finalOffZ = static_cast<float>(Evaluator.Vars.at("offset_z"));
 						break;
 					}
 				}

@@ -1,5 +1,5 @@
 ﻿{
-  "Profile": "Foot_IK_Analytic_Ready",
+  "Profile": "Foot_IK",
   "Version": 3,
   "Schema": {
     "Inputs": [
@@ -30,7 +30,6 @@
           "limit": 120.0
         },
         "Variables": {
-          "offset": ["offset"],
           "delta" : ["delta_sec"],
           "velocity": ["velocity"],
           "bone_l1" : ["bone_l1_cm1", "bone_l1_cm2"],
