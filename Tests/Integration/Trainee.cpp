@@ -72,7 +72,8 @@ int main()
 
     // 3. Criar Modelo e Trainee
     auto model = std::make_shared<NRMultiHeadModel>(InSize, 512);
-    auto trainee = std::make_shared<NR::NRTrainee<float>>(model, MyBotRig, 1e-4);
+    NRRules Ev;
+    auto trainee = std::make_shared<NR::NRTrainee<float>>(model, MyBotRig, Ev, 1e-4);
 
     try
     {

@@ -14,66 +14,65 @@ namespace NR
 	class NRRules
 	{
 	public:
-		std::map<std::string, double> Vars;
-		mu::Parser parser;
+		std::vector<std::unordered_map<std::string, double>> Vars;
+		std::vector<mu::Parser> Parsers;
 
-		NRRules()
+		NRRules() = default;
+
+		void Setup(const NRRule& rule, int bindingIndex)
 		{
-			parser.DefineFun("fmod", fmod_wrapper);
-			parser.DefineConst("_pi", 3.1415926535);
+			EnsureBinding(bindingIndex);
+
+			for (auto const& [name, val] : rule.Constants)
+				DefineVariable(name, val, bindingIndex);
+
+			// Vars que serão preenchidas a cada sample (vindas do Tensor)
+			for (auto const& [varName, _inputList] : rule.Variables)
+				DefineVariable(varName, 0.0, bindingIndex);
+
+			// Vars derivadas (Logic)
+			for (auto const& [logicName, _expr] : rule.Logic)
+				DefineVariable(logicName, 0.0, bindingIndex);
+
+			// Vars de saída das phases (offset_x/y/z, progress, etc)
+			for (auto const& phase : rule.Phases)
+				for (auto const& [formulaName, _expr] : phase.Formulas)
+					DefineVariable(formulaName, 0.0, bindingIndex);
+
+			DefineVariable("t_one", 0.0, bindingIndex);
+			DefineVariable("t_two", 0.0, bindingIndex);
+			DefineVariable("offset_y", 0.0, bindingIndex);
 		}
 
-
-		void Setup(const NRRule& rule, const NRBinding& binding, int bindingIndex, const NRModelProfile& profile, const torch::Tensor& inputTensor)
+		void SetTensorInputs(int bindingIndex, const NRRule& rule, const NRModelProfile& profile, const torch::Tensor& currentInput)
 		{
-			for (auto const& [name, val] : rule.Constants)
-			{
-				Vars[name] = val;
-			}
+			EnsureBinding(bindingIndex);
 
-			for (auto const& [name, val] : binding.Overrides)
-			{
-				Vars[name] = val;
-			}
-
-			// Inject Tensor Inputs
 			for (auto const& [varName, inputList] : rule.Variables)
 			{
-				std::string actualInputName = (inputList.size() > bindingIndex) ? inputList[bindingIndex] : inputList[0];
-
-				torch::Tensor val = profile.GetInputBoneValue(inputTensor, actualInputName);
-
-				if (val.defined() && val.numel() > 0)
+				if(inputList.empty())
 				{
-					Vars[varName] = val.item<float>();
+					continue;
 				}
-				else
-				{
-					std::cerr << "[NeuraRig] ERRO: O input '" << actualInputName
-							  << "' definido na regra nao foi encontrado no Schema de Inputs do JSON!" << std::endl;
-					Vars[varName] = 0.0; // Valor padrão para evitar crash
-				}
-			}
 
-			for (auto& [name, val] : Vars)
-			{
-				if (parser.GetVar().find(name) == parser.GetVar().end())
+				auto pick = inputList[0];
+				if(inputList.size() > bindingIndex)
 				{
-					parser.DefineVar(name, &val);
+					 pick = inputList[bindingIndex];
 				}
+				std::cout << "DEBUG: " << varName << " = " << pick << std::endl;
+				std::cout << "DEBUG: " << varName << " = " << profile.GetInputBoneValue(currentInput, pick).item<double>() << std::endl;
+				Vars[bindingIndex][varName] = profile.GetInputBoneValue(currentInput, pick).item<double>();
 			}
 		}
 
-		float Eval(const std::string& expression)
+		float Eval(int bindingIndex, const std::string& expression)
 		{
 			try
 			{
-				parser.SetExpr(expression);
-				float result = static_cast<float>(parser.Eval());
-
-				// Atualizar variáveis no parser caso tenham sido modificadas (embora DefineVar deva cuidar disso)
-				// Em muParser, variáveis ligadas por ponteiro são atualizadas automaticamente.
-				return result;
+				EnsureBinding(bindingIndex);
+				Parsers[bindingIndex].SetExpr(expression);
+				return static_cast<float>(Parsers[bindingIndex].Eval());
 			}
 			catch (mu::Parser::exception_type& e)
 			{
@@ -81,14 +80,64 @@ namespace NR
 				return 0.0f;
 			}
 		}
-		
-		void DefineVariable(const std::string& name, double initialValue = 0.0)
+
+		void DefineVariable(const std::string& name, double initialValue = 0.0, int bindingIndex = 0)
 		{
-			Vars[name] = initialValue;
-			if (parser.GetVar().find(name) == parser.GetVar().end())
+			EnsureBinding(bindingIndex);
+
+			if (!Vars[bindingIndex].contains(name))
 			{
-				parser.DefineVar(name, &Vars[name]);
+				Vars[bindingIndex][name] = initialValue;
+				Parsers[bindingIndex].DefineVar(name, &Vars[bindingIndex][name]); // <-- ligação REAL com o muParser
 			}
+		}
+
+	private:
+		void EnsureBinding(int bindingIndex)
+		{
+			if (bindingIndex < 0) return;
+
+			if (static_cast<size_t>(bindingIndex) >= Vars.size())
+				Vars.resize(bindingIndex + 1);
+
+			if (static_cast<size_t>(bindingIndex) >= Parsers.size())
+			{
+				Parsers.resize(bindingIndex + 1);
+			}
+
+			if (const bool hasFmod = Parsers[bindingIndex].HasFun("fmod"); !hasFmod)
+			{
+				Parsers[bindingIndex].DefineFun("fmod", fmod_wrapper);
+				Parsers[bindingIndex].DefineConst("_pi", 3.1415926535);
+			}
+		}
+
+		static double GetInputScalar(const NRModelProfile& profile, const torch::Tensor& currentInput, const std::string& token)
+		{
+			std::string name = token;
+			int componentIndex = -1;
+
+			const auto dotPos = token.find('.');
+			if (dotPos != std::string::npos)
+			{
+				name = token.substr(0, dotPos);
+				componentIndex = std::atoi(token.substr(dotPos + 1).c_str());
+			}
+
+			for (const auto& block : profile.Inputs)
+			{
+				if (block.Name != name)
+					continue;
+
+				const int idx = (componentIndex >= 0) ? componentIndex : 0;
+				if (idx < 0 || idx >= block.FloatCount)
+					return 0.0;
+
+				const int64_t absolute = static_cast<int64_t>(block.Offset + idx);
+				return currentInput[absolute].item<double>();
+			}
+
+			return 0.0;
 		}
 	};
 } // NR

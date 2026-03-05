@@ -101,7 +101,6 @@ namespace NR
 								{
 									phase.Formulas[el.key()] = el.value();
 								}
-
 							}
 							rule.Phases.push_back(phase);
 						}
@@ -109,7 +108,6 @@ namespace NR
 					}
 				}
 
-				// --- BINDINGS ---
 				if (schema.contains("Bindings"))
 				{
 					for (const auto& b : schema["Bindings"])
@@ -117,10 +115,6 @@ namespace NR
 						NRBinding binding;
 						binding.BoneName = b["Name"];
 						binding.RuleName = b["Target"];
-						for (auto& el : b["Overrides"].items())
-						{
-							binding.Overrides[el.key()] = el.value();
-						}
 						OutProfile.Bindings.push_back(binding);
 					}
 				}

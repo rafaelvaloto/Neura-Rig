@@ -9,11 +9,20 @@
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, const double LearningRate)
+	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules Ev, const double LearningRate)
 		: TargetModel(TargetModel)
 		  , RigDesc(Rig)
+		  , Evaluator(Ev)
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
+
+		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
+		{
+			auto& binding = RigDesc.Bindings[i];
+
+			auto rule = RigDesc.FindRule(binding.RuleName);
+			Evaluator.Setup(rule, i);
+		}
 	}
 
 	template<FloatingPoint T>
@@ -40,78 +49,54 @@ namespace NR
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
 		int64_t batchSize = Input.size(0);
-
-		NRRules Evaluator;
 		auto IdealTargets = torch::zeros_like(Pred);
 
 		for (int64_t b = 0; b < batchSize; ++b)
 		{
-			torch::Tensor currentInput = Input[b]; // Pega a linha b (1D: [InCount])
+			torch::Tensor currentInput = Input[b];
 
-			// Process bindings (foot_r, foot_l)
 			for (int i = 0; i < RigDesc.Bindings.size(); ++i)
 			{
 				auto& binding = RigDesc.Bindings[i];
-
-				// localize rule by name (Ex: Humanoid_Foot_Curve)
 				auto rule = RigDesc.FindRule(binding.RuleName);
-				Evaluator.Setup(rule, binding, i, RigDesc, currentInput);
 
-				// "Logic" (stride -> cycle -> height)
-				for (auto const& [name, expr] : rule.Logic)
-				{
-					Evaluator.DefineVariable(name);
-				}
+				Evaluator.SetTensorInputs(i, rule, RigDesc, currentInput);
 
 				for (auto const& [name, expr] : rule.Logic)
 				{
-					Evaluator.Vars[name] = Evaluator.Eval(expr);
+					Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
 				}
-
-				// (Stance or Swing)
-				float finalOffX = 0.0f;
-				float finalOffZ = 0.0f;
 
 				for (auto const& phase : rule.Phases)
 				{
-					// Register formulas before available condition
-					for (auto const& [name, expr] : phase.Formulas)
+					if (Evaluator.Eval(i, phase.Condition))
 					{
-						Evaluator.DefineVariable(name);
-					}
-
-					// Condition (ex: cycle < 0.45)
-					if (Evaluator.Eval(phase.Condition) > 0.5f)
-					{
-						for (auto const& [name, expr] : phase.Formulas)
+						for (auto const& [fname, fexpr] : phase.Formulas)
 						{
-							Evaluator.Vars[name] = Evaluator.Eval(expr);
+							Evaluator.Vars[i][fname] = Evaluator.Eval(i, fexpr);
 						}
-
-						finalOffX = static_cast<float>(Evaluator.Vars.at("offset_x"));
-						finalOffZ = static_cast<float>(Evaluator.Vars.at("offset_z"));
-						break;
 					}
 				}
 
-				// IdealTargets
-				// (Ex: foot_r = offset 0, foot_l = offset 3)
-				auto outputBlock = RigDesc.FindOutputBlock(binding.BoneName);
+				std::cout << "DEBUG: " << binding.BoneName << " Progress 1: " << Evaluator.Vars[i].at("t_one") << std::endl;
+				std::cout << "DEBUG: " << binding.BoneName << " X: " << Evaluator.Vars[i].at("offset_x") << std::endl;
+				std::cout << "DEBUG: " << binding.BoneName << " Z: " << Evaluator.Vars[i].at("offset_z") << std::endl;
 
-				// [X, Y, Z]
-				IdealTargets[b][outputBlock.Offset + 0] = finalOffX;
-				IdealTargets[b][outputBlock.Offset + 1] = 0.0f;
-				IdealTargets[b][outputBlock.Offset + 2] = finalOffZ;
+				auto outputBlock = RigDesc.FindOutputBlock(RigDesc.Bindings[i].BoneName);
+				IdealTargets[0][outputBlock.Offset + 0] = static_cast<float>(Evaluator.Vars[i].at("offset_x") );
+				IdealTargets[0][outputBlock.Offset + 1] = static_cast<float>(Evaluator.Vars[i].at("offset_y"));
+				IdealTargets[0][outputBlock.Offset + 2] = static_cast<float>(Evaluator.Vars[i].at("offset_z") );
 			}
 		}
 
-		// (Pred x IdealTargets)
+		IdealTarg = IdealTargets;
+
 		auto PosLoss = torch::mse_loss(Pred, IdealTargets);
 		auto Zero = torch::zeros({1}, torch::kFloat).to(Input.device());
-
 		auto TotalLoss = (PosLoss * 5.0f);
-		return IKLossResult(TotalLoss, PosLoss, Zero, TotalLoss);
+		return IKLossResult(TotalLoss, PosLoss, IdealTargets, TotalLoss);
 	}
+
 
 	template<FloatingPoint T>
 	void NRTrainee<T>::SaveWeights(const std::string& Path)

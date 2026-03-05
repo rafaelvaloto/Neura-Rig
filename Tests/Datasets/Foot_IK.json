@@ -15,44 +15,51 @@
       { "Name": "ground_two",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 9  },
       { "Name": "has_hit_two",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 12 },
 
-      { "Name": "delta_sec",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 13 }
+      { "Name": "delta_sec",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 13 },
+      { "Name": "offset_one",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 14 },
+      { "Name": "offset_two",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 15 }
     ],
     "Bindings": [
-      { "Name": "foot_r", "Target": "Humanoid_Foot_Curve", "Overrides": {"offset": 0.0}},
-      { "Name": "foot_l", "Target": "Humanoid_Foot_Curve", "Overrides": {"offset": 0.5}}
+      { "Name": "foot_r", "Target": "Humanoid_Foot_Curve"},
+      { "Name": "foot_l", "Target": "Humanoid_Foot_Curve"}
     ],
     "Rules": [
       {
         "Name": "Humanoid_Foot_Curve",
         "Constants": {
-          "gain": 1.2,
+          "gain": 1.5,
           "frequency": 0.5,
-          "limit": 120.0
+          "limit": 60.0
         },
         "Variables": {
           "delta" : ["delta_sec"],
           "velocity": ["velocity"],
           "bone_l1" : ["bone_l1_cm1", "bone_l1_cm2"],
-          "bone_l2" : ["bone_l2_cm1", "bone_l2_cm2"]
+          "bone_l2" : ["bone_l2_cm1", "bone_l2_cm2"],
+          "offset"  : ["offset_one", "offset_two"]
         },
         "Logic": {
-          "stride_calculation": "min(velocity * gain, (bone_l1 + bone_l2) * 1.2, limit)",
+          "stride_str": "min((velocity * gain), ((bone_l1 + bone_l2) * 1.2))",
+          "stride_len": "min(stride_str, limit)",
           "cycle": "fmod((delta * frequency) + offset, 1.0)",
           "height": "min(bone_l2 * 0.6, 25.0)"
         },
         "Phases": [
           {
             "id": "stance",
-            "condition": "cycle < 0.45 && velocity > 0.0",
-            "offset_x": "(stride_calculation * 0.5) - ((cycle / 0.45) * stride_calculation)",
+            "condition": "cycle < 0.45",
+            "t_one": "cycle / 0.45",
+            "offset_x": "(stride_len * 0.5) - (t_one * stride_len)",
+            "offset_y": "0.0",
             "offset_z": "0.0"
           },
           {
             "id": "swing",
-            "condition": "cycle >= 0.45 && velocity > 0.0",
-            "progress": "(cycle - 0.45) / 0.55",
-            "offset_x": "-(stride_calculation * 0.5) + (progress * stride_calculation)",
-            "offset_z": "height * sin(_pi * progress)"
+            "condition": "cycle >= 0.45",
+            "t_one": "(cycle - 0.45) / 0.55",
+            "offset_x": "-(stride_len * 0.5) + (t_one * stride_len)",
+            "offset_y": "0.0",
+            "offset_z": "height * sin(_pi * t_one)"
           }
         ]
       }

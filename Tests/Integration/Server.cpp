@@ -17,10 +17,9 @@
 class NRMultiHeadModel : public NR::INRModel<float> {
 public:
 	torch::nn::Sequential backbone{nullptr};
-	torch::nn::Linear head_r{nullptr}, head_l{nullptr}, head_p{nullptr}, head_r_pos{nullptr}, head_l_pos{nullptr}, head_p_pos{nullptr};
+	torch::nn::Linear head_r{nullptr}, head_l{nullptr};
 
 	NRMultiHeadModel(int64_t in_size, int64_t hidden) {
-		// Inicializamos e registamos o backbone
 		backbone = register_module("backbone", torch::nn::Sequential(
 			torch::nn::Linear(in_size, hidden),
 			torch::nn::LayerNorm(torch::nn::LayerNormOptions({hidden})),
@@ -29,28 +28,15 @@ public:
 			torch::nn::ELU()
 		));
 
-		// Inicializamos e registamos as cabeças
-		head_r = register_module("head_r", torch::nn::Linear(hidden, 12)); // 3 Quats (Thigh, Calf, Foot)
-		head_l = register_module("head_l", torch::nn::Linear(hidden, 12)); // 3 Quats
-		head_p = register_module("head_p", torch::nn::Linear(hidden, 4));  // 1 Quat (Pelvis)
-		head_r_pos = register_module("head_r_pos", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_r)
-		head_l_pos = register_module("head_l_pos", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_l)
-		head_p_pos = register_module("head_p_pos", torch::nn::Linear(hidden, 3));  // 1 Vec (Pelvis)
+		head_r = register_module("head_r", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_r)
+		head_l = register_module("head_l", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_l)
 	}
 
-	// 1. Implementação do Forward (A lógica principal)
 	torch::Tensor Forward(torch::Tensor x) override {
 		auto feat = backbone->forward(x);
-
 		auto out_r = head_r->forward(feat);
 		auto out_l = head_l->forward(feat);
-		auto out_p = head_p->forward(feat);
-		auto out_r_pos = head_r_pos->forward(feat);
-		auto out_l_pos = head_l_pos->forward(feat);
-		auto out_p_pos = head_p_pos->forward(feat);
-
-		// Retorna tudo concatenado: [R, L, P] -> Total 28 floats
-		return torch::cat({out_r, out_l, out_p, out_r_pos, out_l_pos, out_p_pos}, 1);
+		return torch::cat({out_r, out_l}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override {
@@ -67,6 +53,7 @@ int main()
 {
 	using namespace NR;
 	NRModelProfile activeProfile;
+	NRRules activeRules;
 
 	std::shared_ptr<NRSolver> solver = nullptr;
 
@@ -91,7 +78,7 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, 1e-4);
+	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 1e-5);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork Network;
@@ -125,34 +112,49 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						if (loss < 0.1f)
+						// Envio do IdealTarg via Socket
+						if (trainee->IdealTarg.defined())
 						{
-							if (!solver)
-							{
-								solver = std::make_shared<NRSolver>(model, activeProfile);
-								std::cout << "Solver Created Successfully!" << std::endl;
-								std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
-							}
+							std::vector<uint8_t> sendBuffer;
+							sendBuffer.push_back(0x03); // Header
 
-							if (solver)
-							{
-								std::vector<float> solveInput(InputSize);
-								std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+							// Convertendo o tensor IdealTarg para um array de bytes
+							auto CPUIdeal = trainee->IdealTarg.to(torch::kCPU).contiguous();
+							const float* dataPtr = CPUIdeal.data_ptr<float>();
+							size_t bytesToCopy = CPUIdeal.numel() * sizeof(float);
+							const auto* bytePtr = reinterpret_cast<const uint8_t*>(dataPtr);
 
-								std::vector<float> predicted = solver->Solve(solveInput);
-
-								std::vector<uint8_t> sendBuffer;
-								sendBuffer.push_back(0x03); // Header
-
-								// 2. (24 * 4 = 96)
-								size_t bytesToCopy = predicted.size() * sizeof(float);
-								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-
-								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-								size_t totalPayloadSize = sendBuffer.size(); // 97 bytes
-								Network.Send(sendBuffer.data(), totalPayloadSize);
-							}
+							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+							Network.Send(sendBuffer.data(), static_cast<int>(sendBuffer.size()));
 						}
+
+						// if (loss <= 0.0001f)
+						// {
+						// 	if (!solver)
+						// 	{
+						// 		solver = std::make_shared<NRSolver>(model, activeProfile);
+						// 		std::cout << "Solver Created Successfully!" << std::endl;
+						// 		std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
+						// 	}
+						//
+						// 	if (solver)
+						// 	{
+						// 		std::vector<float> solveInput(InputSize);
+						// 		std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+						//
+						// 		std::vector<float> predicted = solver->Solve(solveInput);
+						//
+						// 		std::vector<uint8_t> sendBuffer;
+						// 		sendBuffer.push_back(0x03); // Header
+						//
+						// 		size_t bytesToCopy = predicted.size() * sizeof(float);
+						// 		auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+						//
+						// 		sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+						// 		size_t totalPayloadSize = sendBuffer.size();
+						// 		Network.Send(sendBuffer.data(), totalPayloadSize);
+						// 	}
+						// }
 					}
 				}
 			}

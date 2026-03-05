@@ -7,6 +7,9 @@
 #include "NRInterfaces/INRModel.h"
 #include <vector>
 
+#include "NRCore/NRRules.h"
+#include "NRNetwork/NRNetwork.h"
+
 namespace NR
 {
 	template<FloatingPoint T = float>
@@ -15,6 +18,8 @@ namespace NR
 		std::shared_ptr<INRModel<T> > TargetModel;
 		std::unique_ptr<torch::optim::Adam> Optimizer;
 		NRModelProfile RigDesc;
+		NRRules Evaluator;
+		NRNetwork Network;
 
 		/**
 		 * Calculates the next rotation for a given trainee in a training schedule.
@@ -24,7 +29,9 @@ namespace NR
 		 * @param LearningRate The step or interval to determine the next trainee.
 		 */
 	public:
-		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, double LearningRate = 1e-3);
+		torch::Tensor IdealTarg;
+
+		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules Ev, double LearningRate = 1e-3);
 
 		void SaveWeights(const std::string& Path);
 
