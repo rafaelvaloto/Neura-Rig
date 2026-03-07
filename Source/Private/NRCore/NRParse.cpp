@@ -53,11 +53,12 @@ namespace NR
 			{
 				auto schema = j["Schema"];
 
-				// --- INPUTS & OUTPUTS (Já existentes) ---
+				// --- INPUTS & OUTPUTS ---
 				for (const auto& item : schema["Inputs"])
 				{
 					OutProfile.Inputs.push_back({item["Name"], item["Offset"], item["Size"]});
 				}
+
 				for (const auto& item : schema["Outputs"])
 				{
 					OutProfile.Outputs.push_back({item["Name"], item["Offset"], item["Size"]});
@@ -72,21 +73,27 @@ namespace NR
 						rule.Name = r["Name"];
 
 						// Constantes
-						for (auto& el : r["Constants"].items())
+						for (auto& el : schema["Parameters"]["Constants"].items())
 						{
 							rule.Constants[el.key()] = el.value().is_number() ? el.value().get<double>() : 0.0;
 						}
 
 						// Variáveis (Mapeamento de nomes)
-						for (auto& el : r["Variables"].items())
+						for (auto& el : schema["Parameters"]["Variables"].items())
 						{
-							rule.Variables[el.key()] = el.value().get<std::vector<std::string> >();
+							NRVars vars;
+							vars.Name = el.key();
+							vars.List = el.value();
+							rule.Variables.push_back(vars);
 						}
 
 						// Lógica base
 						for (auto& el : r["Logic"].items())
 						{
-							rule.Logic[el.key()] = el.value();
+							NRLogic logic;
+							logic.Name = el.key();
+							logic.Expr = el.value();
+							rule.Logic.push_back(logic);
 						}
 
 						// Fases
@@ -99,7 +106,10 @@ namespace NR
 							{
 								if (el.key() != "id" && el.key() != "condition")
 								{
-									phase.Formulas[el.key()] = el.value();
+									NRFormula formula;
+									formula.Name = el.key();
+									formula.Expr = el.value();
+									phase.Formulas.push_back(formula);
 								}
 							}
 							rule.Phases.push_back(phase);

@@ -42,59 +42,79 @@ namespace NR
 		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
 		Optimizer->step();
 
-		return TotalLoss.item<float>();
+		return TotalLoss.template item<float>();
 	}
 
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
-		int64_t batchSize = Input.size(0);
 		auto IdealTargets = torch::zeros_like(Pred);
 
-		for (int64_t b = 0; b < batchSize; ++b)
+		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
 		{
-			torch::Tensor currentInput = Input[b];
+			auto& binding = RigDesc.Bindings[i];
+			auto rule = RigDesc.FindRule(binding.RuleName);
+			Evaluator.SetTensorInputs(i, rule, RigDesc, Input);
 
-			for (int i = 0; i < RigDesc.Bindings.size(); ++i)
+			for (auto const& [name, expr] : rule.Logic)
 			{
-				auto& binding = RigDesc.Bindings[i];
-				auto rule = RigDesc.FindRule(binding.RuleName);
+				Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
+			}
 
-				Evaluator.SetTensorInputs(i, rule, RigDesc, currentInput);
+			for (auto const& phase : rule.Phases)
+			{
+				// std::cout << "==========P=========" << std::endl;
+				// std::cout << "BIND " << i
+				//   << " ID=" << phase.Id
+				//   << " Condition=" << Evaluator.Eval(i, phase.Condition)
+				//   << " bone_l1=" << Evaluator.Vars[i].at("bone_l1")
+				//   << " bone_l2=" << Evaluator.Vars[i].at("bone_l2")
+				//   << " velocity=" << Evaluator.Vars[i].at("velocity")
+				//   << " t_cycle=" << Evaluator.Vars[i].at("t_cycle")
+				//   << " cycle=" << Evaluator.Vars[i].at("cycle")
+				//   << " stride_amp=" << Evaluator.Vars[i].at("stride_amp")
+				//   << std::endl;
+				// std::cout << "==========P=========" << std::endl;
 
-				for (auto const& [name, expr] : rule.Logic)
+				if (Evaluator.Eval(i, phase.Condition) == 0.0)
 				{
-					Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
+					continue;
 				}
 
-				for (auto const& phase : rule.Phases)
+				for (auto const& [fname, fexpr] : phase.Formulas)
 				{
-					if (Evaluator.Eval(i, phase.Condition))
+					if (fname == "offset_x")
 					{
-						for (auto const& [fname, fexpr] : phase.Formulas)
+						double value = Evaluator.Eval(i, fexpr);
+						if (!std::isfinite(value))
 						{
-							Evaluator.Vars[i][fname] = Evaluator.Eval(i, fexpr);
+							std::cerr << "[NRTrainee] Non-finite formula value for [" << fname
+								<< "] expr=[" << fexpr << "]" << std::endl;
+							value = 0.0;
 						}
+
+						IdealTargets[0][0] = static_cast<float>(value);
+						IdealTargets[0][3] = -static_cast<float>(value);
+						break;
 					}
 				}
-
-				std::cout << "DEBUG: " << binding.BoneName << " Progress 1: " << Evaluator.Vars[i].at("t_one") << std::endl;
-				std::cout << "DEBUG: " << binding.BoneName << " X: " << Evaluator.Vars[i].at("offset_x") << std::endl;
-				std::cout << "DEBUG: " << binding.BoneName << " Z: " << Evaluator.Vars[i].at("offset_z") << std::endl;
-
-				auto outputBlock = RigDesc.FindOutputBlock(RigDesc.Bindings[i].BoneName);
-				IdealTargets[0][outputBlock.Offset + 0] = static_cast<float>(Evaluator.Vars[i].at("offset_x") );
-				IdealTargets[0][outputBlock.Offset + 1] = static_cast<float>(Evaluator.Vars[i].at("offset_y"));
-				IdealTargets[0][outputBlock.Offset + 2] = static_cast<float>(Evaluator.Vars[i].at("offset_z") );
 			}
 		}
 
-		IdealTarg = IdealTargets;
+		if (!torch::isfinite(IdealTargets).all().item<bool>())
+		{
+			std::cerr << "[NRTrainee] IdealTargets contains NaN/Inf." << std::endl;
+			IdealTargets = torch::nan_to_num(IdealTargets, 0.0, 0.0, 0.0);
+		}
 
-		auto PosLoss = torch::mse_loss(Pred, IdealTargets);
-		auto Zero = torch::zeros({1}, torch::kFloat).to(Input.device());
-		auto TotalLoss = (PosLoss * 5.0f);
-		return IKLossResult(TotalLoss, PosLoss, IdealTargets, TotalLoss);
+		auto PredX = torch::stack({Pred.index({0, 0}), Pred.index({0, 3})});
+		auto TargetX = torch::stack({IdealTargets.index({0, 0}), IdealTargets.index({0, 3})});
+
+		auto PosLoss = torch::mse_loss(PredX, TargetX);
+		auto TotalLoss = (PosLoss * 10.0f);
+		auto Zero = torch::zeros({0}, torch::kFloat);
+
+		return IKLossResult(TotalLoss, PosLoss, Zero, Zero);
 	}
 
 

@@ -113,48 +113,49 @@ int main()
 						}
 
 						// Envio do IdealTarg via Socket
-						if (trainee->IdealTarg.defined())
-						{
-							std::vector<uint8_t> sendBuffer;
-							sendBuffer.push_back(0x03); // Header
-
-							// Convertendo o tensor IdealTarg para um array de bytes
-							auto CPUIdeal = trainee->IdealTarg.to(torch::kCPU).contiguous();
-							const float* dataPtr = CPUIdeal.data_ptr<float>();
-							size_t bytesToCopy = CPUIdeal.numel() * sizeof(float);
-							const auto* bytePtr = reinterpret_cast<const uint8_t*>(dataPtr);
-
-							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-							Network.Send(sendBuffer.data(), static_cast<int>(sendBuffer.size()));
-						}
-
-						// if (loss <= 0.0001f)
+						// if (trainee->IdealTarg.defined())
 						// {
-						// 	if (!solver)
-						// 	{
-						// 		solver = std::make_shared<NRSolver>(model, activeProfile);
-						// 		std::cout << "Solver Created Successfully!" << std::endl;
-						// 		std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
-						// 	}
+						// 	std::vector<uint8_t> sendBuffer;
+						// 	sendBuffer.push_back(0x03); // Header
 						//
-						// 	if (solver)
-						// 	{
-						// 		std::vector<float> solveInput(InputSize);
-						// 		std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+						// 	// Convertendo o tensor IdealTarg para um array de bytes
+						// 	auto CPUIdeal = trainee->IdealTarg.to(torch::kCPU).contiguous();
+						// 	const float* dataPtr = CPUIdeal.data_ptr<float>();
+						// 	size_t bytesToCopy = CPUIdeal.numel() * sizeof(float);
+						// 	const auto* bytePtr = reinterpret_cast<const uint8_t*>(dataPtr);
 						//
-						// 		std::vector<float> predicted = solver->Solve(solveInput);
-						//
-						// 		std::vector<uint8_t> sendBuffer;
-						// 		sendBuffer.push_back(0x03); // Header
-						//
-						// 		size_t bytesToCopy = predicted.size() * sizeof(float);
-						// 		auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-						//
-						// 		sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-						// 		size_t totalPayloadSize = sendBuffer.size();
-						// 		Network.Send(sendBuffer.data(), totalPayloadSize);
-						// 	}
+						// 	sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+						// 	Network.Send(sendBuffer.data(), static_cast<int>(sendBuffer.size()));
 						// }
+
+						if (loss < 0.50f)
+						{
+							if (!solver)
+							{
+								trainee->SaveWeights("my_model.pt");
+								solver = std::make_shared<NRSolver>(model, activeProfile);
+								std::cout << "Solver Created Successfully!" << std::endl;
+								std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
+							}
+
+							if (solver)
+							{
+								std::vector<float> solveInput(InputSize);
+								std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+
+								std::vector<float> predicted = solver->Solve(solveInput);
+
+								std::vector<uint8_t> sendBuffer;
+								sendBuffer.push_back(0x03); // Header
+
+								size_t bytesToCopy = predicted.size() * sizeof(float);
+								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+
+								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+								size_t totalPayloadSize = sendBuffer.size();
+								Network.Send(sendBuffer.data(), totalPayloadSize);
+							}
+						}
 					}
 				}
 			}

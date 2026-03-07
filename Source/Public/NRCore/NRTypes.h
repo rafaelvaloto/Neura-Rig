@@ -35,16 +35,34 @@ namespace NR
 		int32_t FloatCount;
 	};
 
+	struct NRFormula
+	{
+		std::string Name;
+		std::string Expr;
+	};
+
+	struct NRVars
+	{
+		std::string Name;
+		std::vector<std::string> List;
+	};
+
+	struct NRLogic
+	{
+		std::string Name;
+		std::string Expr;
+	};
+
 	struct NRRule {
 		std::string Name;
 		std::map<std::string, double> Constants;
-		std::map<std::string, std::vector<std::string>> Variables;
-		std::map<std::string, std::string> Logic;
+		std::vector<NRVars> Variables;
+		std::vector<NRLogic> Logic;
 
 		struct Phase {
 			std::string Id;
 			std::string Condition;
-			std::map<std::string, std::string> Formulas;
+			std::vector<NRFormula> Formulas;
 		};
 		std::vector<Phase> Phases;
 	};
@@ -52,7 +70,6 @@ namespace NR
 	struct NRBinding {
 		std::string BoneName;
 		std::string RuleName;
-		std::map<std::string, double> Overrides;
 	};
 
 	struct NRModelProfile

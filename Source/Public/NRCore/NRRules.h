@@ -14,8 +14,10 @@ namespace NR
 	class NRRules
 	{
 	public:
+		double deltaTime = 0.0f;
 		std::vector<std::unordered_map<std::string, double>> Vars;
 		std::vector<mu::Parser> Parsers;
+
 
 		NRRules() = default;
 
@@ -24,23 +26,34 @@ namespace NR
 			EnsureBinding(bindingIndex);
 
 			for (auto const& [name, val] : rule.Constants)
+			{
 				DefineVariable(name, val, bindingIndex);
+			}
+
 
 			// Vars que serão preenchidas a cada sample (vindas do Tensor)
 			for (auto const& [varName, _inputList] : rule.Variables)
+			{
 				DefineVariable(varName, 0.0, bindingIndex);
+			}
+
 
 			// Vars derivadas (Logic)
 			for (auto const& [logicName, _expr] : rule.Logic)
+			{
 				DefineVariable(logicName, 0.0, bindingIndex);
+			}
 
 			// Vars de saída das phases (offset_x/y/z, progress, etc)
 			for (auto const& phase : rule.Phases)
+			{
 				for (auto const& [formulaName, _expr] : phase.Formulas)
+				{
 					DefineVariable(formulaName, 0.0, bindingIndex);
+				}
+			}
 
 			DefineVariable("t_one", 0.0, bindingIndex);
-			DefineVariable("t_two", 0.0, bindingIndex);
 			DefineVariable("offset_y", 0.0, bindingIndex);
 		}
 
@@ -50,29 +63,33 @@ namespace NR
 
 			for (auto const& [varName, inputList] : rule.Variables)
 			{
-				if(inputList.empty())
-				{
-					continue;
-				}
-
 				auto pick = inputList[0];
 				if(inputList.size() > bindingIndex)
 				{
 					 pick = inputList[bindingIndex];
 				}
-				std::cout << "DEBUG: " << varName << " = " << pick << std::endl;
-				std::cout << "DEBUG: " << varName << " = " << profile.GetInputBoneValue(currentInput, pick).item<double>() << std::endl;
+
+				if (pick == "delta_time")
+				{
+					if (bindingIndex == 0)
+					{
+						deltaTime += profile.GetInputBoneValue(currentInput, pick).item<double>();
+					}
+
+					Vars[bindingIndex][varName] = deltaTime;
+					continue;
+				}
 				Vars[bindingIndex][varName] = profile.GetInputBoneValue(currentInput, pick).item<double>();
 			}
 		}
 
-		float Eval(int bindingIndex, const std::string& expression)
+		double Eval(int bindingIndex, const std::string& expression)
 		{
 			try
 			{
 				EnsureBinding(bindingIndex);
 				Parsers[bindingIndex].SetExpr(expression);
-				return static_cast<float>(Parsers[bindingIndex].Eval());
+				return Parsers[bindingIndex].Eval();
 			}
 			catch (mu::Parser::exception_type& e)
 			{
@@ -90,6 +107,11 @@ namespace NR
 				Vars[bindingIndex][name] = initialValue;
 				Parsers[bindingIndex].DefineVar(name, &Vars[bindingIndex][name]); // <-- ligação REAL com o muParser
 			}
+		}
+
+		void ResetTime()
+		{
+			deltaTime = 0.0f;
 		}
 
 	private:
@@ -112,32 +134,5 @@ namespace NR
 			}
 		}
 
-		static double GetInputScalar(const NRModelProfile& profile, const torch::Tensor& currentInput, const std::string& token)
-		{
-			std::string name = token;
-			int componentIndex = -1;
-
-			const auto dotPos = token.find('.');
-			if (dotPos != std::string::npos)
-			{
-				name = token.substr(0, dotPos);
-				componentIndex = std::atoi(token.substr(dotPos + 1).c_str());
-			}
-
-			for (const auto& block : profile.Inputs)
-			{
-				if (block.Name != name)
-					continue;
-
-				const int idx = (componentIndex >= 0) ? componentIndex : 0;
-				if (idx < 0 || idx >= block.FloatCount)
-					return 0.0;
-
-				const int64_t absolute = static_cast<int64_t>(block.Offset + idx);
-				return currentInput[absolute].item<double>();
-			}
-
-			return 0.0;
-		}
 	};
 } // NR
