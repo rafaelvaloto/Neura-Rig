@@ -14,10 +14,9 @@ namespace NR
 	class NRRules
 	{
 	public:
-		double deltaTime = 0.0f;
+		double deltaTime = 0.0;
 		std::vector<std::unordered_map<std::string, double>> Vars;
 		std::vector<mu::Parser> Parsers;
-
 
 		NRRules() = default;
 
@@ -52,9 +51,6 @@ namespace NR
 					DefineVariable(formulaName, 0.0, bindingIndex);
 				}
 			}
-
-			DefineVariable("t_one", 0.0, bindingIndex);
-			DefineVariable("offset_y", 0.0, bindingIndex);
 		}
 
 		void SetTensorInputs(int bindingIndex, const NRRule& rule, const NRModelProfile& profile, const torch::Tensor& currentInput)
@@ -111,7 +107,10 @@ namespace NR
 
 		void ResetTime()
 		{
-			deltaTime = 0.0f;
+			if (deltaTime >= 4.0)
+			{
+				deltaTime = 0.0f;
+			}
 		}
 
 	private:

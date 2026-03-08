@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "NRCore/NRRules.h"
-#include "NRNetwork/NRNetwork.h"
 
 namespace NR
 {
@@ -19,7 +18,10 @@ namespace NR
 		std::unique_ptr<torch::optim::Adam> Optimizer;
 		NRModelProfile RigDesc;
 		NRRules Evaluator;
-		NRNetwork Network;
+
+		static constexpr int AmpWindow = 16;
+		std::vector<std::deque<float>> PredXHistory;  // offset_x previsto
+		std::vector<std::deque<float>> IdealXHistory;
 
 		/**
 		 * Calculates the next rotation for a given trainee in a training schedule.

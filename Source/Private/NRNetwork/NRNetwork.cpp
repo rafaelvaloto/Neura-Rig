@@ -39,6 +39,9 @@ namespace NR
 			return false;
 		}
 
+		u_long mode = 1;
+		ioctlsocket(serverSocket, FIONBIO, &mode);
+
 		bIsRunning = true;
 		return true;
 	}

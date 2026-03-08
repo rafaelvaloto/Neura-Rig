@@ -75,24 +75,36 @@ int main()
 	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
 
 	auto InputSize = activeProfile.GetRequiredInputSize();
-	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512);
+	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 1024);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 1e-5);
+	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 1e-4);
 	std::cout << "Model trainee configuration!" << std::endl;
+
+	NRNetwork dNetwork;
+	int dport = 6004;
+
+	if (!dNetwork.StartServer(dport))
+	{
+		std::cout << "Failed to start debug server on port " << dport << std::endl;
+		return 1;
+	}
 
 	NRNetwork Network;
 	int port = 6003;
 	if (Network.StartServer(port))
 	{
+
 		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Server Started!" << std::endl;
 		std::cout << "Success socket NeuralRig port: " << port << std::endl;
+		std::cout << "Success socket Debug port: " << dport << std::endl;
 		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Waiting for messages..." << std::endl;
 		static int frameCounter = 0;
 		while (true)
 		{
+			// Recebe dados do socket principal
 			int bytes = Network.Receive();
 			if (bytes > 0)
 			{
@@ -112,59 +124,67 @@ int main()
 							std::cout << "----------------------------------" << std::endl;
 						}
 
-						// Envio do IdealTarg via Socket
-						// if (trainee->IdealTarg.defined())
-						// {
-						// 	std::vector<uint8_t> sendBuffer;
-						// 	sendBuffer.push_back(0x03); // Header
-						//
-						// 	// Convertendo o tensor IdealTarg para um array de bytes
-						// 	auto CPUIdeal = trainee->IdealTarg.to(torch::kCPU).contiguous();
-						// 	const float* dataPtr = CPUIdeal.data_ptr<float>();
-						// 	size_t bytesToCopy = CPUIdeal.numel() * sizeof(float);
-						// 	const auto* bytePtr = reinterpret_cast<const uint8_t*>(dataPtr);
-						//
-						// 	sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-						// 	Network.Send(sendBuffer.data(), static_cast<int>(sendBuffer.size()));
-						// }
-
-						if (loss < 0.50f)
+						if (trainee->IdealTarg.defined())
 						{
-							if (!solver)
-							{
-								trainee->SaveWeights("my_model.pt");
-								solver = std::make_shared<NRSolver>(model, activeProfile);
-								std::cout << "Solver Created Successfully!" << std::endl;
-								std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
-							}
+							std::vector<uint8_t> dSendBuffer;
+							dSendBuffer.push_back(0x04); // Header debug - IdealTarg
 
-							if (solver)
-							{
-								std::vector<float> solveInput(InputSize);
-								std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+							// Convertendo o tensor IdealTarg para um array de bytes
+							const float* dDataPtr = trainee->IdealTarg.data_ptr<float>();
+							size_t dNumElements = trainee->IdealTarg.numel();
+							size_t dBytesToCopy = dNumElements * sizeof(float);
+							auto* dBytePtr = reinterpret_cast<const uint8_t*>(dDataPtr);
 
-								std::vector<float> predicted = solver->Solve(solveInput);
+							dSendBuffer.insert(dSendBuffer.end(), dBytePtr, dBytePtr + dBytesToCopy);
+							size_t dTotalPayloadSize = dSendBuffer.size();
+							dNetwork.Send(dSendBuffer.data(), dTotalPayloadSize);
+						}
 
-								std::vector<uint8_t> sendBuffer;
-								sendBuffer.push_back(0x03); // Header
+						if (!solver)
+						{
+							solver = std::make_shared<NRSolver>(model, activeProfile);
+							std::cout << "Solver Created Successfully!" << std::endl;
+							std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
+						}
 
-								size_t bytesToCopy = predicted.size() * sizeof(float);
-								auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+						if (solver)
+						{
+							std::vector<float> solveInput(InputSize);
+							std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
 
-								sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-								size_t totalPayloadSize = sendBuffer.size();
-								Network.Send(sendBuffer.data(), totalPayloadSize);
-							}
+							std::vector<float> predicted = solver->Solve(solveInput);
+
+							std::vector<uint8_t> sendBuffer;
+							sendBuffer.push_back(0x03); // Header
+
+							size_t bytesToCopy = predicted.size() * sizeof(float);
+							auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+
+							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+							size_t totalPayloadSize = sendBuffer.size();
+							Network.Send(sendBuffer.data(), totalPayloadSize);
 						}
 					}
 				}
 			}
-			else
+			else if (bytes == 0)
 			{
 				std::cout << "----------------------------------" << std::endl;
 				std::cout << "Ping received package[0]" << bytes << " bytes." << std::endl;
 				std::cout << "----------------------------------" << std::endl;
 			}
+
+			// Recebe dados do socket de debug (opcional, caso queira enviar comandos para o server via 6004)
+			int dBytes = dNetwork.Receive();
+			if (dBytes > 0)
+			{
+				uint8_t dHeader = dNetwork.GetHeader();
+				// Lógica para tratar comandos de debug recebidos na porta 6004, se necessário.
+				// Por enquanto apenas logamos.
+				std::cout << "Debug command received on port " << dport << " Header: " << (int)dHeader << std::endl;
+			}
+
+			// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 	}
 	return 0;

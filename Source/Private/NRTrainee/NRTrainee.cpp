@@ -16,6 +16,9 @@ namespace NR
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
 
+		PredXHistory.resize(RigDesc.Bindings.size());
+		IdealXHistory.resize(RigDesc.Bindings.size());
+
 		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
 		{
 			auto& binding = RigDesc.Bindings[i];
@@ -48,42 +51,48 @@ namespace NR
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
+		const int64_t BatchSize = Input.size(0);
 		auto IdealTargets = torch::zeros_like(Pred);
 
-		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
+		Evaluator.ResetTime();
+		for (int64_t sample = 0; sample < BatchSize; ++sample)
 		{
-			auto& binding = RigDesc.Bindings[i];
-			auto rule = RigDesc.FindRule(binding.RuleName);
-			Evaluator.SetTensorInputs(i, rule, RigDesc, Input);
-
-			for (auto const& [name, expr] : rule.Logic)
+			for (int i = 0; i < RigDesc.Bindings.size(); ++i)
 			{
-				Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
-			}
+				auto& binding = RigDesc.Bindings[i];
+				auto rule = RigDesc.FindRule(binding.RuleName);
+				Evaluator.SetTensorInputs(i, rule, RigDesc, Input);
 
-			for (auto const& phase : rule.Phases)
-			{
-				// std::cout << "==========P=========" << std::endl;
-				// std::cout << "BIND " << i
-				//   << " ID=" << phase.Id
-				//   << " Condition=" << Evaluator.Eval(i, phase.Condition)
-				//   << " bone_l1=" << Evaluator.Vars[i].at("bone_l1")
-				//   << " bone_l2=" << Evaluator.Vars[i].at("bone_l2")
-				//   << " velocity=" << Evaluator.Vars[i].at("velocity")
-				//   << " t_cycle=" << Evaluator.Vars[i].at("t_cycle")
-				//   << " cycle=" << Evaluator.Vars[i].at("cycle")
-				//   << " stride_amp=" << Evaluator.Vars[i].at("stride_amp")
-				//   << std::endl;
-				// std::cout << "==========P=========" << std::endl;
-
-				if (Evaluator.Eval(i, phase.Condition) == 0.0)
+				for (auto const& [name, expr] : rule.Logic)
 				{
-					continue;
+					Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
 				}
 
-				for (auto const& [fname, fexpr] : phase.Formulas)
+				for (auto const& phase : rule.Phases)
 				{
-					if (fname == "offset_x")
+					const double sign = Evaluator.Eval(i, phase.Condition);
+					// std::cout << "==========P=========" << std::endl;
+					// std::cout << "BIND " << i
+					// 	<< " ID=" << phase.Id
+					// 	<< " Bone=" << binding.BoneName
+					// 	<< " Rule=" << binding.RuleName
+					// 	<< " Condition=" << sign
+					// 	<< " bone_l1=" << Evaluator.Vars[i].at("bone_l1")
+					// 	<< " bone_l2=" << Evaluator.Vars[i].at("bone_l2")
+					// 	<< " velocity=" << Evaluator.Vars[i].at("velocity")
+					// 	<< " t_cycle=" << Evaluator.Vars[i].at("t_cycle")
+					// 	<< " cycle=" << Evaluator.Vars[i].at("cycle")
+					// 	<< " stride_amp=" << Evaluator.Vars[i].at("stride_amp")
+					// 	<< std::endl;
+					// std::cout << "==========P=========" << std::endl;
+
+					if (sign == 0)
+					{
+						continue;
+					}
+
+					int idx = 0;
+					for (auto const& [fname, fexpr] : phase.Formulas)
 					{
 						double value = Evaluator.Eval(i, fexpr);
 						if (!std::isfinite(value))
@@ -93,28 +102,36 @@ namespace NR
 							value = 0.0;
 						}
 
-						IdealTargets[0][0] = static_cast<float>(value);
-						IdealTargets[0][3] = -static_cast<float>(value);
+						if (value == 0.0)
+						{
+							idx++;
+							continue;
+						}
+
+						Evaluator.Vars[i][fname] = value;
+						IdealTargets[sample][0] = static_cast<float>(value);
+						IdealTargets[sample][3] = -static_cast<float>(value);
+
+						IdealTarg = IdealTargets;
 						break;
 					}
+					break;
 				}
 			}
 		}
 
-		if (!torch::isfinite(IdealTargets).all().item<bool>())
-		{
-			std::cerr << "[NRTrainee] IdealTargets contains NaN/Inf." << std::endl;
-			IdealTargets = torch::nan_to_num(IdealTargets, 0.0, 0.0, 0.0);
-		}
-
 		auto PredX = torch::stack({Pred.index({0, 0}), Pred.index({0, 3})});
 		auto TargetX = torch::stack({IdealTargets.index({0, 0}), IdealTargets.index({0, 3})});
-
 		auto PosLoss = torch::mse_loss(PredX, TargetX);
-		auto TotalLoss = (PosLoss * 10.0f);
-		auto Zero = torch::zeros({0}, torch::kFloat);
 
-		return IKLossResult(TotalLoss, PosLoss, Zero, Zero);
+		auto diff = Pred.index({0, 0}) - Pred.index({0, 3});
+		auto ideal= IdealTargets.index({0, 0}) - IdealTargets.index({0, 3});
+		auto AmpLoss = torch::mse_loss(diff, ideal);
+
+		auto TotalLoss = (PosLoss * 1.0f) + (AmpLoss * 5.0f);
+
+		auto Zero = torch::zeros({0}, torch::kFloat);
+		return IKLossResult(TotalLoss, Zero, Zero, Zero);
 	}
 
 
