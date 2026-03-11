@@ -3,35 +3,33 @@
   "Version": 3,
   "Schema": {
     "Inputs": [
-      { "Name": "velocity",           "Space": "-",  "Type": "float", "Size": 1, "Offset": 0 },
+      { "Name": "velocity",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 0 },
 
-      { "Name": "bone_l1_r",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 1 },
-      { "Name": "bone_l2_r",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 2 },
-      { "Name": "ground_one",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 3 },
-      { "Name": "has_hit_one",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 6 },
+      { "Name": "bone_l1_r",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 1 },
+      { "Name": "bone_l2_r",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 2 },
+      { "Name": "offset_r",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 3 },
 
-      { "Name": "bone_l1_l",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 7  },
-      { "Name": "bone_l2_l",          "Space": "-",  "Type": "float", "Size": 1, "Offset": 8  },
-      { "Name": "ground_two",         "Space": "PS", "Type": "vec3",  "Size": 3, "Offset": 9  },
-      { "Name": "has_hit_two",        "Space": "-",  "Type": "flag",  "Size": 1, "Offset": 12 },
+      { "Name": "bone_l1_l",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 4 },
+      { "Name": "bone_l2_l",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 5 },
+      { "Name": "offset_l",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 6 },
 
-      { "Name": "delta_time",         "Space": "dt",  "Type": "float", "Size": 1, "Offset": 13 },
-      { "Name": "acc_time",           "Space": "sec", "Type": "float", "Size": 1, "Offset": 14 }
+      { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 7 }
     ],
     "Bindings": [
-      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve"},
-      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve"}
+      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 3, "Offset": 0 },
+      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Size": 3, "Offset": 3 }
     ],
     "Parameters": {
       "Constants": {
-        "k": 1.2
+        "k": 1.2,
+        "step_height": 0.30
       },
       "Variables": {
+        "t_cycle" : ["t_cycle"],
         "velocity": ["velocity"],
+        "offset"  : ["offset_r", "offset_l"],
         "bone_l1" : ["bone_l1_r", "bone_l1_l"],
-        "bone_l2" : ["bone_l2_r", "bone_l2_l"],
-        "t_cycle" : ["delta_time"],
-        "acc_time" : ["acc_time"]
+        "bone_l2" : ["bone_l2_r", "bone_l2_l"]
       }
     },
     "Rules": [
@@ -39,31 +37,31 @@
         "Name": "Humanoid_Foot_Ik_Curve",
         "Logic": {
           "stride_len": "k * sqrt(velocity * (bone_l1 + bone_l2))",
-          "stride_amp": "(stride_len / 2.0)",
-          "freq": "velocity / stride_amp",
-          "cycle": "cos(2.0 * _pi * freq * t_cycle)"
+          "stride_freq": "velocity / (stride_len / 2.0)",
+          "phase_offset": "fmod((stride_freq * t_cycle) + offset, 1.0)",
+          "linear_cycle": "2.0 * phase_offset - 1.0",
+          "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
         "Phases": [
           {
             "id": "stance",
-            "condition": "cycle < 0.4",
-            "offset_x": "-(cycle * stride_amp)",
+            "condition": "linear_cycle < 0.0",
+            "offset_x": "-(linear_cycle * stride_len)",
             "offset_y": "0.0",
             "offset_z": "0.0"
           },
           {
             "id": "swing",
-            "condition": "cycle >= 0.4",
-            "offset_x": "(cycle * stride_amp) * -1.0",
+            "condition": "linear_cycle >= 0.0",
+            "offset_x": "(linear_cycle * stride_len)",
             "offset_y": "0.0",
-            "offset_z": "0.0"
+            "offset_z": "height_offset * (4.0 * linear_cycle * (1.0 - linear_cycle))"
           }
         ]
       }
     ],
     "Outputs": [
-      { "Name": "foot_r",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 0 },
-      { "Name": "foot_l",           "Space": "LS", "Type": "vec3",  "Size": 3, "Offset": 3 }
+      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 0 }
     ]
   }
 }

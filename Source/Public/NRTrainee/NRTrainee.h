@@ -14,15 +14,19 @@ namespace NR
 	template<FloatingPoint T = float>
 	class NRTrainee
 	{
+		static constexpr int AmpWindow = 16;
+
 		std::shared_ptr<INRModel<T> > TargetModel;
 		std::unique_ptr<torch::optim::Adam> Optimizer;
-		NRModelProfile RigDesc;
+
+		std::vector<std::deque<float> > PredXHistory;
+		std::vector<std::deque<float> > IdealXHistory;
+
 		NRRules Evaluator;
+		NRModelProfile RigDesc;
+		std::unordered_map<std::string, NRRule> V_rules;
 
-		static constexpr int AmpWindow = 16;
-		std::vector<std::deque<float>> PredXHistory;  // offset_x previsto
-		std::vector<std::deque<float>> IdealXHistory;
-
+	public:
 		/**
 		 * Calculates the next rotation for a given trainee in a training schedule.
 		 *
@@ -30,14 +34,18 @@ namespace NR
 		 * @param Rig The list of all trainees in the schedule.
 		 * @param LearningRate The step or interval to determine the next trainee.
 		 */
-	public:
-		torch::Tensor IdealTarg;
+		torch::Tensor IdealTargets;
+		torch::Tensor Predicated;
 
-		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules Ev, double LearningRate = 1e-3);
-
-		void SaveWeights(const std::string& Path);
-
-		void LoadWeights(const std::string& Path);
+		/**
+		 * Retrieves the next trainee in the training sequence based on the current state.
+		 *
+		 * @param TargetModel
+		 * @param Rig
+		 * @param Ev
+		 * @param LearningRate
+		 */
+		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, const NRModelProfile& Rig, const NRRules& Ev, double LearningRate = 1e-3);
 
 		/**
 		 * Executes the next step in the training process by determining the current stage.
@@ -56,39 +64,14 @@ namespace NR
 		 */
 		IKLossResult ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred);
 
-		torch::Tensor NormalizeQuats(const torch::Tensor& q)
-		{
-			auto norm = q.norm(2, 1, true);
-			return q / (norm + 1e-8);
-		}
+		/**
+		 * @brief Resets all internal state to a clean slate for a fresh training session.
+		 * Clears optimizer momentum, evaluator state, prediction history, and re-initializes model weights.
+		 */
+		void Reset();
 
-		// q = (x, y, z, w)
-		torch::Tensor QuatMultiply(const torch::Tensor& q1, const torch::Tensor& q2)
-		{
-			auto x1 = q1.select(1, 0), y1 = q1.select(1, 1);
-			auto z1 = q1.select(1, 2), w1 = q1.select(1, 3);
-			auto x2 = q2.select(1, 0), y2 = q2.select(1, 1);
-			auto z2 = q2.select(1, 2), w2 = q2.select(1, 3);
+		void SaveWeights(const std::string& Path);
 
-			auto w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
-			auto x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
-			auto y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
-			auto z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
-
-			return torch::stack({x, y, z, w}, 1);
-		}
-
-		torch::Tensor QuatRotateVector(const torch::Tensor& q, const torch::Tensor& v)
-		{
-			auto qw = q.select(1, 3).unsqueeze(1);
-			auto qvec = q.slice(1, 0, 3);
-
-			// t = 2 * cross(qvec, v)
-			auto t = 2.0f * torch::linalg_cross(qvec, v, 1);
-
-			// result = v + qw * t + cross(qvec, t)
-			return v + qw * t + torch::linalg_cross(qvec, t, 1);
-		}
-
+		void LoadWeights(const std::string& Path);
 	};
 } // namespace NR

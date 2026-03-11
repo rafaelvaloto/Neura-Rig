@@ -123,6 +123,8 @@ namespace NR
 					for (const auto& b : schema["Bindings"])
 					{
 						NRBinding binding;
+						binding.Size = b["Size"];
+						binding.Offset = b["Offset"];
 						binding.BoneName = b["Name"];
 						binding.RuleName = b["Target"];
 						OutProfile.Bindings.push_back(binding);

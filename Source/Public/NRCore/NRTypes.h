@@ -70,6 +70,8 @@ namespace NR
 	struct NRBinding {
 		std::string BoneName;
 		std::string RuleName;
+		int Size;
+		int Offset;
 	};
 
 	struct NRModelProfile

@@ -3,28 +3,38 @@
 // All rights reserved.
 #include "NRTrainee/NRTrainee.h"
 
+#include <ranges>
+
 #include "NRCore/NRRules.h"
 #include "NRCore/NRTypes.h"
 
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules Ev, const double LearningRate)
+	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, const NRModelProfile& Rig, const NRRules& Ev, const double LearningRate)
 		: TargetModel(TargetModel)
-		  , RigDesc(Rig)
 		  , Evaluator(Ev)
+		  , RigDesc(Rig)
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
 
-		PredXHistory.resize(RigDesc.Bindings.size());
-		IdealXHistory.resize(RigDesc.Bindings.size());
+		auto size = RigDesc.GetRequiredOutputSize();
+		IdealTargets = torch::zeros_like(torch::empty({1, size}));
+		Predicated = torch::zeros_like(torch::empty({1, size}));
 
+		const int b_size = RigDesc.Bindings.size();
+		V_rules.reserve(b_size);
 		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
 		{
-			auto& binding = RigDesc.Bindings[i];
+			auto& [BoneName, RuleName, Size, Offset] = RigDesc.Bindings[i];
+			auto F_rule = RigDesc.FindRule(RuleName);
+			Evaluator.Setup(F_rule, i);
 
-			auto rule = RigDesc.FindRule(binding.RuleName);
-			Evaluator.Setup(rule, i);
+			if (V_rules.find(F_rule.Name) != V_rules.end())
+			{
+				continue;
+			}
+			V_rules.emplace(F_rule.Name, F_rule);
 		}
 	}
 
@@ -34,7 +44,7 @@ namespace NR
 		int32_t InCount = RigDesc.GetRequiredInputSize();
 		int32_t BatchSize = static_cast<int32_t>(InputFloats.size()) / InCount;
 
-		auto options = torch::TensorOptions().dtype(torch::kFloat).device(torch::kCPU);
+		const auto options = torch::TensorOptions().dtype(torch::kFloat).device(torch::kCPU);
 		auto InputTensor = torch::from_blob((void*)InputFloats.data(), {BatchSize, InCount}, options).clone();
 
 		Optimizer->zero_grad();
@@ -43,95 +53,57 @@ namespace NR
 
 		TotalLoss.backward();
 		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
-		Optimizer->step();
 
+		Optimizer->step();
 		return TotalLoss.template item<float>();
 	}
 
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
 	{
-		const int64_t BatchSize = Input.size(0);
-		auto IdealTargets = torch::zeros_like(Pred);
+		auto T_pred = Pred;
+		auto T_ideal = torch::zeros_like(Pred);
 
-		Evaluator.ResetTime();
-		for (int64_t sample = 0; sample < BatchSize; ++sample)
+		int b_size = RigDesc.Bindings.size();
+		for (auto rule : V_rules | std::views::values)
 		{
-			for (int i = 0; i < RigDesc.Bindings.size(); ++i)
+			for (int i = 0; i < b_size; ++i)
 			{
-				auto& binding = RigDesc.Bindings[i];
-				auto rule = RigDesc.FindRule(binding.RuleName);
 				Evaluator.SetTensorInputs(i, rule, RigDesc, Input);
-
 				for (auto const& [name, expr] : rule.Logic)
 				{
 					Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
 				}
 
-				for (auto const& phase : rule.Phases)
+				for (const auto& [Id, Condition, Formulas] : rule.Phases)
 				{
-					const double sign = Evaluator.Eval(i, phase.Condition);
-					// std::cout << "==========P=========" << std::endl;
-					// std::cout << "BIND " << i
-					// 	<< " ID=" << phase.Id
-					// 	<< " Bone=" << binding.BoneName
-					// 	<< " Rule=" << binding.RuleName
-					// 	<< " Condition=" << sign
-					// 	<< " bone_l1=" << Evaluator.Vars[i].at("bone_l1")
-					// 	<< " bone_l2=" << Evaluator.Vars[i].at("bone_l2")
-					// 	<< " velocity=" << Evaluator.Vars[i].at("velocity")
-					// 	<< " t_cycle=" << Evaluator.Vars[i].at("t_cycle")
-					// 	<< " cycle=" << Evaluator.Vars[i].at("cycle")
-					// 	<< " stride_amp=" << Evaluator.Vars[i].at("stride_amp")
-					// 	<< std::endl;
-					// std::cout << "==========P=========" << std::endl;
-
-					if (sign == 0)
+					if (Evaluator.Eval(i, Condition) > 0)
 					{
-						continue;
-					}
+						int S_idx = 0;
+						auto R_idx = RigDesc.Bindings[i];
+						std::cout << "[NRTrainee] Evaluating " << Id <<  " in " << R_idx.BoneName <<  std::endl;
 
-					int idx = 0;
-					for (auto const& [fname, fexpr] : phase.Formulas)
-					{
-						double value = Evaluator.Eval(i, fexpr);
-						if (!std::isfinite(value))
+						for (auto const& [fname, fexpr] : Formulas)
 						{
-							std::cerr << "[NRTrainee] Non-finite formula value for [" << fname
-								<< "] expr=[" << fexpr << "]" << std::endl;
-							value = 0.0;
+							auto val = Evaluator.Eval(i, fexpr);
+							Evaluator.Vars[i][fname] = val;
+							T_ideal[0][R_idx.Offset + S_idx] = val;
+
+							std::cout << "[NRTrainee] IdealTargets[" << R_idx.Offset + S_idx << "] : " << IdealTargets[0][R_idx.Offset + S_idx] << std::endl;
+							S_idx++;
 						}
-
-						if (value == 0.0)
-						{
-							idx++;
-							continue;
-						}
-
-						Evaluator.Vars[i][fname] = value;
-						IdealTargets[sample][0] = static_cast<float>(value);
-						IdealTargets[sample][3] = -static_cast<float>(value);
-
-						IdealTarg = IdealTargets;
 						break;
 					}
-					break;
 				}
 			}
 		}
 
-		auto PredX = torch::stack({Pred.index({0, 0}), Pred.index({0, 3})});
-		auto TargetX = torch::stack({IdealTargets.index({0, 0}), IdealTargets.index({0, 3})});
-		auto PosLoss = torch::mse_loss(PredX, TargetX);
+		Predicated = T_pred;
+		IdealTargets = T_ideal;
 
-		auto diff = Pred.index({0, 0}) - Pred.index({0, 3});
-		auto ideal= IdealTargets.index({0, 0}) - IdealTargets.index({0, 3});
-		auto AmpLoss = torch::mse_loss(diff, ideal);
-
-		auto TotalLoss = (PosLoss * 1.0f) + (AmpLoss * 5.0f);
-
-		auto Zero = torch::zeros({0}, torch::kFloat);
-		return IKLossResult(TotalLoss, Zero, Zero, Zero);
+		const auto PosLoss = torch::mse_loss(T_pred, T_ideal);
+		const auto TotalLoss = (PosLoss* 1.0f);
+		return IKLossResult(TotalLoss, PosLoss, PosLoss, PosLoss);
 	}
 
 
@@ -146,6 +118,41 @@ namespace NR
 	{
 		torch::load(TargetModel, Path);
 		TargetModel->train();
+	}
+
+	template<FloatingPoint T>
+	void NRTrainee<T>::Reset()
+	{
+		for (auto& p : TargetModel->parameters())
+		{
+			if (p.dim() >= 2)
+				torch::nn::init::xavier_uniform_(p);
+			else
+				torch::nn::init::zeros_(p);
+		}
+
+		double lr = Optimizer->param_groups()[0].options().get_lr();
+		Optimizer = std::make_unique<torch::optim::Adam>(
+			TargetModel->parameters(),
+			torch::optim::AdamOptions(lr)
+			);
+
+		Evaluator.deltaTime = 0.0;
+		for (auto& varMap : Evaluator.Vars)
+		{
+			for (auto& [key, val] : varMap)
+			{
+				val = 0.0;
+			}
+		}
+
+		for (auto& deq : PredXHistory)
+			deq.clear();
+		for (auto& deq : IdealXHistory)
+			deq.clear();
+
+		IdealTargets = torch::Tensor();
+		std::cout << "[NRTrainee] Reset complete. Clean state for training." << std::endl;
 	}
 
 

@@ -5,7 +5,8 @@
 #include "muParser.h"
 #include "NRTypes.h"
 
-static mu::value_type fmod_wrapper(mu::value_type v1, mu::value_type v2) {
+static mu::value_type fmod_wrapper(mu::value_type v1, mu::value_type v2)
+{
 	return std::fmod(v1, v2);
 }
 
@@ -15,7 +16,7 @@ namespace NR
 	{
 	public:
 		double deltaTime = 0.0;
-		std::vector<std::unordered_map<std::string, double>> Vars;
+		std::vector<std::unordered_map<std::string, double> > Vars;
 		std::vector<mu::Parser> Parsers;
 
 		NRRules() = default;
@@ -29,13 +30,11 @@ namespace NR
 				DefineVariable(name, val, bindingIndex);
 			}
 
-
 			// Vars que serão preenchidas a cada sample (vindas do Tensor)
 			for (auto const& [varName, _inputList] : rule.Variables)
 			{
 				DefineVariable(varName, 0.0, bindingIndex);
 			}
-
 
 			// Vars derivadas (Logic)
 			for (auto const& [logicName, _expr] : rule.Logic)
@@ -60,16 +59,26 @@ namespace NR
 			for (auto const& [varName, inputList] : rule.Variables)
 			{
 				auto pick = inputList[0];
-				if(inputList.size() > bindingIndex)
+				if (inputList.size() > bindingIndex)
 				{
-					 pick = inputList[bindingIndex];
+					pick = inputList[bindingIndex];
 				}
 
-				if (pick == "delta_time")
+				if (pick == "t_cycle")
 				{
 					if (bindingIndex == 0)
 					{
+						const float bone_l1 = profile.GetInputBoneValue(currentInput, "bone_l1_r").item<float>();
+						const float bone_l2 = profile.GetInputBoneValue(currentInput, "bone_l2_r").item<float>();
+						const float velocity = profile.GetInputBoneValue(currentInput, "velocity").item<float>();
+						const float T_gait = 2.0 * (1.0 / (velocity * (bone_l1 + bone_l2)));
+
 						deltaTime += profile.GetInputBoneValue(currentInput, pick).item<double>();
+						if (deltaTime > T_gait)
+						{
+							deltaTime = deltaTime - T_gait;
+							std::cout << "T_gait: " << T_gait << std::endl;
+						}
 					}
 
 					Vars[bindingIndex][varName] = deltaTime;
@@ -107,16 +116,14 @@ namespace NR
 
 		void ResetTime()
 		{
-			if (deltaTime >= 4.0)
-			{
-				deltaTime = 0.0f;
-			}
+			deltaTime = 0.0f;
 		}
 
 	private:
 		void EnsureBinding(int bindingIndex)
 		{
-			if (bindingIndex < 0) return;
+			if (bindingIndex < 0)
+				return;
 
 			if (static_cast<size_t>(bindingIndex) >= Vars.size())
 				Vars.resize(bindingIndex + 1);
