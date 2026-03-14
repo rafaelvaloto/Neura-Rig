@@ -78,9 +78,9 @@ namespace NR
 							return logic.Name == "T_gait";
 						});
 						const auto T_gait = Eval(bindingIndex, T_it->Expr);
-						if (deltaTime >= T_gait)
+						if (T_gait > 0.0)
 						{
-							deltaTime = deltaTime - T_gait;
+							deltaTime = std::fmod(deltaTime, T_gait);
 						}
 
 						*(it->second) = deltaTime;

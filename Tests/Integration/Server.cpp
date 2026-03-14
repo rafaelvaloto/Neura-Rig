@@ -141,39 +141,39 @@ int main()
 							dNetwork.Send(dSendBuffer.data(), dTotalPayloadSize);
 						}
 
-						if (trainee->Predicated.defined())
-						{
-							std::vector<uint8_t> SendBuffer;
-							SendBuffer.push_back(0x03); // Header debug - IdealTarg
-
-							// Convertendo o tensor IdealTarg para um array de bytes
-							const float* DataPtr = trainee->Predicated.data_ptr<float>();
-							size_t NumElements = trainee->Predicated.numel();
-							size_t BytesToCopy = NumElements * sizeof(float);
-							auto* BytePtr = reinterpret_cast<const uint8_t*>(DataPtr);
-
-							SendBuffer.insert(SendBuffer.end(), BytePtr, BytePtr + BytesToCopy);
-							size_t TotalPayloadSize = SendBuffer.size();
-							Network.Send(SendBuffer.data(), TotalPayloadSize);
-						}
-
-						// if (solver)
+						// if (trainee->Predicated.defined())
 						// {
-						// 	std::vector<float> solveInput(InputSize);
-						// 	std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+						// 	std::vector<uint8_t> SendBuffer;
+						// 	SendBuffer.push_back(0x03); // Header debug - IdealTarg
 						//
-						// 	std::vector<float> predicted = solver->Solve(solveInput);
+						// 	// Convertendo o tensor IdealTarg para um array de bytes
+						// 	const float* DataPtr = trainee->Predicated.data_ptr<float>();
+						// 	size_t NumElements = trainee->Predicated.numel();
+						// 	size_t BytesToCopy = NumElements * sizeof(float);
+						// 	auto* BytePtr = reinterpret_cast<const uint8_t*>(DataPtr);
 						//
-						// 	std::vector<uint8_t> sendBuffer;
-						// 	sendBuffer.push_back(0x03); // Header
-						//
-						// 	size_t bytesToCopy = predicted.size() * sizeof(float);
-						// 	auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-						//
-						// 	sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-						// 	size_t totalPayloadSize = sendBuffer.size();
-						// 	Network.Send(sendBuffer.data(), totalPayloadSize);
+						// 	SendBuffer.insert(SendBuffer.end(), BytePtr, BytePtr + BytesToCopy);
+						// 	size_t TotalPayloadSize = SendBuffer.size();
+						// 	Network.Send(SendBuffer.data(), TotalPayloadSize);
 						// }
+
+						if (solver)
+						{
+							std::vector<float> solveInput(InputSize);
+							std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+
+							std::vector<float> predicted = solver->Solve(solveInput);
+
+							std::vector<uint8_t> sendBuffer;
+							sendBuffer.push_back(0x03); // Header
+
+							size_t bytesToCopy = predicted.size() * sizeof(float);
+							auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+
+							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+							size_t totalPayloadSize = sendBuffer.size();
+							Network.Send(sendBuffer.data(), totalPayloadSize);
+						}
 					}
 				}
 			}

@@ -23,7 +23,7 @@
     "Parameters": {
       "Constants": {
         "k": 1.2,
-        "step_height": 0.30
+        "step_height": 0.45
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -39,8 +39,8 @@
         "Logic": {
           "T_gait": "2.0 * (1.0 / (velocity * (bone_l1 + bone_l2)))",
           "stride_len": "k * sqrt(velocity * (bone_l1 + bone_l2))",
-          "stride_freq": "velocity / stride_len",
-          "phase_offset": "fmod((stride_freq * t_cycle) + offset, 1.0)",
+          "stride_freq": "velocity / (stride_len / 2.0)",
+          "phase_offset": "fmod((t_cycle / T_gait) * 2.0 + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
           "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
@@ -57,7 +57,7 @@
             "condition": "linear_cycle >= 0.0",
             "offset_x": "linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "height_offset * (2.0 * linear_cycle * (1.0 - linear_cycle))"
+            "offset_z": "height_offset * sin(_pi *(2.0 * linear_cycle * (1.0 - linear_cycle)))"
           }
         ]
       }
