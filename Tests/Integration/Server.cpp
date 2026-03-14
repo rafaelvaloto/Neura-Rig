@@ -75,7 +75,7 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512);
 	std::cout << "Model created!" << std::endl;
 
-	// solver = std::make_shared<NRSolver>(model, activeProfile);
+	solver = std::make_shared<NRSolver>(model, activeProfile);
 	std::cout << "Solver Created Successfully!" << std::endl;
 	std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
 

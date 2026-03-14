@@ -15,9 +15,9 @@ namespace NR
 	class NRRules
 	{
 	public:
-		double deltaTime = 0.0;
-		std::vector<std::unordered_map<std::string, double> > Vars;
+		double deltaTime = 0.5f;
 		std::vector<mu::Parser> Parsers;
+		std::vector<std::map<std::string, double>> Vars;
 
 		NRRules() = default;
 
@@ -25,36 +25,40 @@ namespace NR
 		{
 			EnsureBinding(bindingIndex);
 
+			std::cout << "Binding " << bindingIndex << "RuleName" << rule.Name << std::endl;
 			for (auto const& [name, val] : rule.Constants)
 			{
 				DefineVariable(name, val, bindingIndex);
 			}
 
-			// Vars que serão preenchidas a cada sample (vindas do Tensor)
 			for (auto const& [varName, _inputList] : rule.Variables)
 			{
+				std::cout << "  [RULE " << bindingIndex << "] " << varName << std::endl;
 				DefineVariable(varName, 0.0, bindingIndex);
 			}
 
-			// Vars derivadas (Logic)
 			for (auto const& [logicName, _expr] : rule.Logic)
 			{
+				std::cout << "  [RULE " << bindingIndex << "] " << logicName << std::endl;
 				DefineVariable(logicName, 0.0, bindingIndex);
 			}
 
-			// Vars de saída das phases (offset_x/y/z, progress, etc)
 			for (auto const& phase : rule.Phases)
 			{
+				DefineVariable(phase.Id + "_condition", 0.0, bindingIndex);
 				for (auto const& [formulaName, _expr] : phase.Formulas)
 				{
-					DefineVariable(formulaName, 0.0, bindingIndex);
+					if (formulaName != "Condition" && formulaName != "Id")
+					{
+						DefineVariable(phase.Id + "_" + formulaName, 0.0, bindingIndex);
+					}
 				}
 			}
 		}
 
 		void SetTensorInputs(int bindingIndex, const NRRule& rule, const NRModelProfile& profile, const torch::Tensor& currentInput)
 		{
-			EnsureBinding(bindingIndex);
+			auto& varMap = Parsers[bindingIndex].GetVar();
 
 			for (auto const& [varName, inputList] : rule.Variables)
 			{
@@ -66,25 +70,28 @@ namespace NR
 
 				if (pick == "t_cycle")
 				{
-					if (bindingIndex == 0)
+					deltaTime += profile.GetInputBoneValue(currentInput, pick).item<double>();
+					if (auto it = varMap.find(varName); it != varMap.end())
 					{
-						const float bone_l1 = profile.GetInputBoneValue(currentInput, "bone_l1_r").item<float>();
-						const float bone_l2 = profile.GetInputBoneValue(currentInput, "bone_l2_r").item<float>();
-						const float velocity = profile.GetInputBoneValue(currentInput, "velocity").item<float>();
-						const float T_gait = 2.0 * (1.0 / (velocity * (bone_l1 + bone_l2)));
-
-						deltaTime += profile.GetInputBoneValue(currentInput, pick).item<double>();
-						if (deltaTime > T_gait)
+						auto& logics = rule.Logic;
+						auto T_it = std::find_if(logics.begin(), logics.end(), [&](const auto& logic) {
+							return logic.Name == "T_gait";
+						});
+						const auto T_gait = Eval(bindingIndex, T_it->Expr);
+						if (deltaTime >= T_gait)
 						{
 							deltaTime = deltaTime - T_gait;
-							std::cout << "T_gait: " << T_gait << std::endl;
 						}
-					}
 
-					Vars[bindingIndex][varName] = deltaTime;
+						*(it->second) = deltaTime;
+					}
 					continue;
 				}
-				Vars[bindingIndex][varName] = profile.GetInputBoneValue(currentInput, pick).item<double>();
+
+				if (auto it = varMap.find(varName); it != varMap.end())
+				{
+					*(it->second) = profile.GetInputBoneValue(currentInput, pick).item<double>();
+				}
 			}
 		}
 
@@ -92,8 +99,16 @@ namespace NR
 		{
 			try
 			{
-				EnsureBinding(bindingIndex);
 				Parsers[bindingIndex].SetExpr(expression);
+
+				// DEBUG: dump what the parser actually sees
+				// auto& varStorage = Vars[bindingIndex];
+				// for (auto& [name, val] : varStorage)
+				// {
+				// 	std::cout << "  [STORAGE " << bindingIndex << "] " << name
+				// 			  << " val=" << val << std::endl;
+				// }
+
 				return Parsers[bindingIndex].Eval();
 			}
 			catch (mu::Parser::exception_type& e)
@@ -103,15 +118,10 @@ namespace NR
 			}
 		}
 
-		void DefineVariable(const std::string& name, double initialValue = 0.0, int bindingIndex = 0)
+		void DefineVariable(const std::string& name, double Value = 0.0, int bindingIndex = 0)
 		{
-			EnsureBinding(bindingIndex);
-
-			if (!Vars[bindingIndex].contains(name))
-			{
-				Vars[bindingIndex][name] = initialValue;
-				Parsers[bindingIndex].DefineVar(name, &Vars[bindingIndex][name]); // <-- ligação REAL com o muParser
-			}
+			Vars[bindingIndex][name] = Value;
+			Parsers[bindingIndex].DefineVar(name, &Vars[bindingIndex][name]);
 		}
 
 		void ResetTime()
@@ -122,23 +132,31 @@ namespace NR
 	private:
 		void EnsureBinding(int bindingIndex)
 		{
-			if (bindingIndex < 0)
-				return;
-
-			if (static_cast<size_t>(bindingIndex) >= Vars.size())
-				Vars.resize(bindingIndex + 1);
-
-			if (static_cast<size_t>(bindingIndex) >= Parsers.size())
+			if (Parsers.size() == 0)
 			{
-				Parsers.resize(bindingIndex + 1);
+				mu::Parser newParser;
+				Parsers.reserve(bindingIndex + 8);
+				Parsers.push_back(newParser);
+
+				Vars.reserve(bindingIndex + 8);
+				Vars.push_back({});
+			}
+			else if (bindingIndex >= Parsers.size())
+			{
+				mu::Parser newParser;
+				Parsers.push_back(newParser);
+				Vars.push_back({});
+				std::cout << "Binding " << bindingIndex << std::endl;
 			}
 
 			if (const bool hasFmod = Parsers[bindingIndex].HasFun("fmod"); !hasFmod)
 			{
+				std::cout << "!hasFmod " << bindingIndex << std::endl;
 				Parsers[bindingIndex].DefineFun("fmod", fmod_wrapper);
 				Parsers[bindingIndex].DefineConst("_pi", 3.1415926535);
 			}
-		}
 
+
+		}
 	};
 } // NR

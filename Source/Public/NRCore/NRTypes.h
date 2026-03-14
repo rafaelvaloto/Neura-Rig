@@ -70,6 +70,7 @@ namespace NR
 	struct NRBinding {
 		std::string BoneName;
 		std::string RuleName;
+		std::vector<NRRule> Rules;
 		int Size;
 		int Offset;
 	};
@@ -77,7 +78,6 @@ namespace NR
 	struct NRModelProfile
 	{
 		std::string ProfileName;
-		std::vector<NRRule> Rules;
 		std::vector<NRBinding> Bindings;
 		std::vector<NRDataBlock> Inputs;
 		std::vector<NRDataBlock> Outputs;
@@ -92,9 +92,9 @@ namespace NR
 			Outputs.push_back({name, size, true});
 		}
 
-		[[nodiscard]] NRRule FindRule(const std::string& name) const
+		[[nodiscard]] NRRule FindRule(const std::string& name, int index) const
 		{
-			for (const auto& rule : Rules)
+			for (const auto& rule : Bindings[index].Rules)
 			{
 				if (rule.Name == name) return rule;
 			}

@@ -31,7 +31,7 @@
 #pragma warning(pop)
 #endif
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 using namespace mu;
 
 namespace NR
@@ -65,60 +65,7 @@ namespace NR
 				}
 
 				// --- RULES ---
-				if (schema.contains("Rules"))
-				{
-					for (const auto& r : schema["Rules"])
-					{
-						NRRule rule;
-						rule.Name = r["Name"];
-
-						// Constantes
-						for (auto& el : schema["Parameters"]["Constants"].items())
-						{
-							rule.Constants[el.key()] = el.value().is_number() ? el.value().get<double>() : 0.0;
-						}
-
-						// Variáveis (Mapeamento de nomes)
-						for (auto& el : schema["Parameters"]["Variables"].items())
-						{
-							NRVars vars;
-							vars.Name = el.key();
-							vars.List = el.value();
-							rule.Variables.push_back(vars);
-						}
-
-						// Lógica base
-						for (auto& el : r["Logic"].items())
-						{
-							NRLogic logic;
-							logic.Name = el.key();
-							logic.Expr = el.value();
-							rule.Logic.push_back(logic);
-						}
-
-						// Fases
-						for (const auto& p : r["Phases"])
-						{
-							NRRule::Phase phase;
-							phase.Id = p["id"];
-							phase.Condition = p["condition"];
-							for (auto& el : p.items())
-							{
-								if (el.key() != "id" && el.key() != "condition")
-								{
-									NRFormula formula;
-									formula.Name = el.key();
-									formula.Expr = el.value();
-									phase.Formulas.push_back(formula);
-								}
-							}
-							rule.Phases.push_back(phase);
-						}
-						OutProfile.Rules.push_back(rule);
-					}
-				}
-
-				if (schema.contains("Bindings"))
+				if (schema.contains("Rules") && schema.contains("Bindings"))
 				{
 					for (const auto& b : schema["Bindings"])
 					{
@@ -127,7 +74,67 @@ namespace NR
 						binding.Offset = b["Offset"];
 						binding.BoneName = b["Name"];
 						binding.RuleName = b["Target"];
-						OutProfile.Bindings.push_back(binding);
+
+						auto& rules = schema["Rules"];
+						auto it = std::find_if(rules.begin(), rules.end(), [&](const auto& rule) {
+							return rule["Name"] == b["Target"];
+						});
+
+						if (it != rules.end())
+						{
+							NRRule rule;
+							rule.Name = it->at("Name");
+
+							// Constants
+							for (auto& el : schema["Parameters"]["Constants"].items())
+							{
+								rule.Constants[el.key()] = el.value().is_number() ? el.value().get<double>() : 0.0;
+							}
+
+							// Variables
+							for (auto& el : schema["Parameters"]["Variables"].items())
+							{
+								NRVars vars;
+								vars.Name = el.key();
+								vars.List = el.value();
+								rule.Variables.push_back(vars);
+							}
+
+							for (auto& el : it->at("Logic").items())
+							{
+								NRLogic logic;
+								logic.Name = el.key();
+								logic.Expr = el.value();
+								rule.Logic.push_back(logic);
+								std::cout << "Logic: " << logic.Name  << " : " << logic.Expr << std::endl;
+							}
+
+							for (int p = 0; p < it->at("Phases").size(); p++)
+							{
+								NRRule::Phase phase;
+								rule.Phases.push_back(phase);
+							}
+
+							for (auto& el : it->at("Phases").items())
+							{
+								rule.Phases.at(std::stoi(el.key())).Id = el.value().at("id");
+								rule.Phases.at(std::stoi(el.key())).Condition = el.value().at("condition");
+								for (auto& el2 : el.value().items())
+								{
+									if (el2.key() != "condition" && el2.key() != "id")
+									{
+										NRFormula formula;
+										formula.Name = el2.key();
+										formula.Expr = el2.value();
+
+										std::cout << "Formula: " << formula.Name  << " : " << formula.Expr << std::endl;
+										rule.Phases.at(std::stoi(el.key())).Formulas.push_back(formula);
+									}
+								}
+							}
+							binding.Rules.push_back(rule);
+							OutProfile.Bindings.push_back(binding);
+						}
 					}
 				}
 			}

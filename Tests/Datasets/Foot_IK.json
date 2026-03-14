@@ -13,7 +13,8 @@
       { "Name": "bone_l2_l",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 5 },
       { "Name": "offset_l",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 6 },
 
-      { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 7 }
+      { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 7 },
+      { "Name": "t_accumulated",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 8 }
     ],
     "Bindings": [
       { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 3, "Offset": 0 },
@@ -25,19 +26,20 @@
         "step_height": 0.30
       },
       "Variables": {
-        "t_cycle" : ["t_cycle"],
-        "velocity": ["velocity"],
+        "velocity": ["velocity", "velocity"],
         "offset"  : ["offset_r", "offset_l"],
         "bone_l1" : ["bone_l1_r", "bone_l1_l"],
-        "bone_l2" : ["bone_l2_r", "bone_l2_l"]
+        "bone_l2" : ["bone_l2_r", "bone_l2_l"],
+        "t_cycle" : ["t_cycle", "t_cycle"]
       }
     },
     "Rules": [
       {
         "Name": "Humanoid_Foot_Ik_Curve",
         "Logic": {
+          "T_gait": "2.0 * (1.0 / (velocity * (bone_l1 + bone_l2)))",
           "stride_len": "k * sqrt(velocity * (bone_l1 + bone_l2))",
-          "stride_freq": "velocity / (stride_len / 2.0)",
+          "stride_freq": "velocity / stride_len",
           "phase_offset": "fmod((stride_freq * t_cycle) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
           "height_offset": "min(bone_l2 * 0.6, step_height)"
@@ -46,16 +48,16 @@
           {
             "id": "stance",
             "condition": "linear_cycle < 0.0",
-            "offset_x": "-(linear_cycle * stride_len)",
+            "offset_x": "-linear_cycle * stride_len",
             "offset_y": "0.0",
             "offset_z": "0.0"
           },
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
-            "offset_x": "(linear_cycle * stride_len)",
+            "offset_x": "linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "height_offset * (4.0 * linear_cycle * (1.0 - linear_cycle))"
+            "offset_z": "height_offset * (2.0 * linear_cycle * (1.0 - linear_cycle))"
           }
         ]
       }

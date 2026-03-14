@@ -18,23 +18,21 @@ namespace NR
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
 
-		auto size = RigDesc.GetRequiredOutputSize();
-		IdealTargets = torch::zeros_like(torch::empty({1, size}));
-		Predicated = torch::zeros_like(torch::empty({1, size}));
+		auto T_size = RigDesc.GetRequiredOutputSize();
+		IdealTargets = torch::zeros_like(torch::empty({1, T_size}));
+		Predicated = torch::zeros_like(torch::empty({1, T_size}));
 
-		const int b_size = RigDesc.Bindings.size();
-		V_rules.reserve(b_size);
-		for (int i = 0; i < RigDesc.Bindings.size(); ++i)
+		auto B_size = RigDesc.Bindings.size();
+		for (auto i = 0; i < B_size; ++i)
 		{
-			auto& [BoneName, RuleName, Size, Offset] = RigDesc.Bindings[i];
-			auto F_rule = RigDesc.FindRule(RuleName);
-			Evaluator.Setup(F_rule, i);
-
-			if (V_rules.find(F_rule.Name) != V_rules.end())
+			auto F_rule= RigDesc.Bindings[i].Rules[0];
+			if (F_rule.Name.empty())
 			{
+				std::cerr << "[NRTrainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
 				continue;
 			}
-			V_rules.emplace(F_rule.Name, F_rule);
+
+			Evaluator.Setup(F_rule, i);
 		}
 	}
 
@@ -59,49 +57,69 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& Input, const torch::Tensor& Pred)
+	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const  torch::Tensor& Pred)
 	{
-		auto T_pred = Pred;
 		auto T_ideal = torch::zeros_like(Pred);
+		auto B_size = RigDesc.Bindings.size();
 
-		int b_size = RigDesc.Bindings.size();
-		for (auto rule : V_rules | std::views::values)
+		for (auto i = 0; i < B_size; ++i)
 		{
-			for (int i = 0; i < b_size; ++i)
+			auto& varMap = Evaluator.Parsers[i].GetVar();
+
+			auto& Bindings = RigDesc.Bindings[i];
+			auto& F_rule = Bindings.Rules[0];
+			if (F_rule.Name.empty())
 			{
-				Evaluator.SetTensorInputs(i, rule, RigDesc, Input);
-				for (auto const& [name, expr] : rule.Logic)
-				{
-					Evaluator.Vars[i][name] = Evaluator.Eval(i, expr);
+				std::cerr << "[NRTrainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
+				continue;
+			}
+
+			Evaluator.SetTensorInputs(i, F_rule, RigDesc, InputTensor);
+			for (auto& logic : F_rule.Logic)
+			{
+				auto it = varMap.find(logic.Name);
+				if (it == varMap.end()) {
+					std::cerr << "[NRTrainee] Logic variable not found: " << logic.Name << std::endl;
+					continue;
 				}
 
-				for (const auto& [Id, Condition, Formulas] : rule.Phases)
+				*(it->second) = Evaluator.Eval(i, logic.Expr);
+			}
+
+			for (auto& [Id, Condition, Formulas] : F_rule.Phases)
+			{
+				auto it = varMap.find(Id + "_condition");
+				if (it == varMap.end()) {
+					std::cerr << "[NRTrainee] Phase condition variable not found: " << Id + "_condition" << std::endl;
+					continue;
+				}
+
+				*(it->second) = Evaluator.Eval(i, Condition);
+				if (*(it->second) == 0)
 				{
-					if (Evaluator.Eval(i, Condition) > 0)
+					continue;
+				}
+
+				int B_idx = 0;
+				for (auto& [formulaName, expr] : Formulas)
+				{
+					auto F_it = varMap.find(Id + "_" + formulaName);
+					if (F_it != varMap.end())
 					{
-						int S_idx = 0;
-						auto R_idx = RigDesc.Bindings[i];
-						std::cout << "[NRTrainee] Evaluating " << Id <<  " in " << R_idx.BoneName <<  std::endl;
-
-						for (auto const& [fname, fexpr] : Formulas)
-						{
-							auto val = Evaluator.Eval(i, fexpr);
-							Evaluator.Vars[i][fname] = val;
-							T_ideal[0][R_idx.Offset + S_idx] = val;
-
-							std::cout << "[NRTrainee] IdealTargets[" << R_idx.Offset + S_idx << "] : " << IdealTargets[0][R_idx.Offset + S_idx] << std::endl;
-							S_idx++;
-						}
-						break;
+						*(F_it->second) = Evaluator.Eval(i, expr);
+						T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
 					}
+
+					B_idx++;
 				}
+				break;
 			}
 		}
 
-		Predicated = T_pred;
+		Predicated = Pred;
 		IdealTargets = T_ideal;
 
-		const auto PosLoss = torch::mse_loss(T_pred, T_ideal);
+		const auto PosLoss = torch::mse_loss(Pred, T_ideal);
 		const auto TotalLoss = (PosLoss* 1.0f);
 		return IKLossResult(TotalLoss, PosLoss, PosLoss, PosLoss);
 	}
@@ -138,14 +156,6 @@ namespace NR
 			);
 
 		Evaluator.deltaTime = 0.0;
-		for (auto& varMap : Evaluator.Vars)
-		{
-			for (auto& [key, val] : varMap)
-			{
-				val = 0.0;
-			}
-		}
-
 		for (auto& deq : PredXHistory)
 			deq.clear();
 		for (auto& deq : IdealXHistory)
