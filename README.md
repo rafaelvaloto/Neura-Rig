@@ -35,11 +35,6 @@ NeuraRig uses a programmable logic layer to define movement patterns. This allow
 
 The library processes high-level locomotion parameters and outputs precise IK targets in **Local Space (LS)**.
 
-### Logic Definition
-The system evaluates the physics of the stride through a structured rule-set:
-> **Stride Length ($L_s$):** $k \cdot \sqrt{v \cdot (l_1 + l_2)}$  
-> **Gait Period ($T_{gait}$):** $2.0 \cdot (1.0 / (v \cdot (l_1 + l_2)))$
-
 ### Data Flow (Tensor Mapping)
 ```text
 Inputs (9 floats):
