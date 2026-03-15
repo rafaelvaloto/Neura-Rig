@@ -57,7 +57,7 @@
             "condition": "linear_cycle >= 0.0",
             "offset_x": "linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "height_offset * sin(_pi *(2.0 * linear_cycle * (1.0 - linear_cycle)))"
+            "offset_z": "height_offset * (1.0 - (2.0 * linear_cycle - 1.0)^4)"
           }
         ]
       }
