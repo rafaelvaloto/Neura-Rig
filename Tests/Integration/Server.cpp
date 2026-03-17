@@ -19,7 +19,7 @@ public:
 	torch::nn::Sequential backbone{nullptr};
 	torch::nn::Linear head_foot_ik{nullptr};
 
-	NRMultiHeadModel(int64_t in_size, int64_t hidden) {
+	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t out_size) {
 		backbone = register_module("backbone", torch::nn::Sequential(
 			torch::nn::Linear(in_size, hidden),
 			torch::nn::LayerNorm(torch::nn::LayerNormOptions({hidden})),
@@ -28,7 +28,7 @@ public:
 			torch::nn::ELU()
 		));
 
-		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 6));
+		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, out_size));
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override {
@@ -72,12 +72,9 @@ int main()
 	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
 
 	auto InputSize = activeProfile.GetRequiredInputSize();
-	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512);
+	auto out_size = activeProfile.GetRequiredOutputSize();
+	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512, out_size);
 	std::cout << "Model created!" << std::endl;
-
-	solver = std::make_shared<NRSolver>(model, activeProfile);
-	std::cout << "Solver Created Successfully!" << std::endl;
-	std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
 
 	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 1e-4);
 	std::cout << "Model trainee configuration!" << std::endl;
@@ -96,7 +93,6 @@ int main()
 	int port = 6003;
 	if (Network.StartServer(port))
 	{
-
 		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Server Started!" << std::endl;
 		std::cout << "Success socket NeuralRig port: " << port << std::endl;
@@ -156,6 +152,12 @@ int main()
 						// 	size_t TotalPayloadSize = SendBuffer.size();
 						// 	Network.Send(SendBuffer.data(), TotalPayloadSize);
 						// }
+
+						if (!solver && loss < 0.00001)
+						{
+							solver = std::make_shared<NRSolver>(model, activeProfile);
+							std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
+						}
 
 						if (solver)
 						{

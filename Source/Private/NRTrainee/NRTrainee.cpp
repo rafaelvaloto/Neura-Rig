@@ -59,64 +59,60 @@ namespace NR
 	template<FloatingPoint T>
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const  torch::Tensor& Pred)
 	{
-		auto btSize = InputTensor.size(0);
 		auto T_ideal = torch::zeros_like(Pred);
 		auto B_size = RigDesc.Bindings.size();
 
-		for (int bt = 0; bt < btSize; bt++)
+		for (auto i = 0; i < B_size; ++i)
 		{
-			for (auto i = 0; i < B_size; ++i)
-			{
-				auto& varMap = Evaluator.Parsers[i].GetVar();
+			auto& varMap = Evaluator.Parsers[i].GetVar();
 
-				auto& Bindings = RigDesc.Bindings[i];
-				auto& F_rule = Bindings.Rules[0];
-				if (F_rule.Name.empty())
-				{
-					std::cerr << "[NRTrainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
+			auto& Bindings = RigDesc.Bindings[i];
+			auto& F_rule = Bindings.Rules[0];
+			if (F_rule.Name.empty())
+			{
+				std::cerr << "[NRTrainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
+				continue;
+			}
+
+			Evaluator.SetTensorInputs(i, F_rule, RigDesc, InputTensor);
+			for (auto& logic : F_rule.Logic)
+			{
+				auto it = varMap.find(logic.Name);
+				if (it == varMap.end()) {
+					std::cerr << "[NRTrainee] Logic variable not found: " << logic.Name << std::endl;
 					continue;
 				}
 
-				Evaluator.SetTensorInputs(i, F_rule, RigDesc, InputTensor);
-				for (auto& logic : F_rule.Logic)
-				{
-					auto it = varMap.find(logic.Name);
-					if (it == varMap.end()) {
-						std::cerr << "[NRTrainee] Logic variable not found: " << logic.Name << std::endl;
-						continue;
-					}
+				*(it->second) = Evaluator.Eval(i, logic.Expr);
+			}
 
-					*(it->second) = Evaluator.Eval(i, logic.Expr);
+			for (auto& [Id, Condition, Formulas] : F_rule.Phases)
+			{
+				auto it = varMap.find(Id + "_condition");
+				if (it == varMap.end()) {
+					std::cerr << "[NRTrainee] Phase condition variable not found: " << Id + "_condition" << std::endl;
+					continue;
 				}
 
-				for (auto& [Id, Condition, Formulas] : F_rule.Phases)
+				*(it->second) = Evaluator.Eval(i, Condition);
+				if (*(it->second) == 0)
 				{
-					auto it = varMap.find(Id + "_condition");
-					if (it == varMap.end()) {
-						std::cerr << "[NRTrainee] Phase condition variable not found: " << Id + "_condition" << std::endl;
-						continue;
-					}
-
-					*(it->second) = Evaluator.Eval(i, Condition);
-					if (*(it->second) == 0)
-					{
-						continue;
-					}
-
-					int B_idx = 0;
-					for (auto& [formulaName, expr] : Formulas)
-					{
-						auto F_it = varMap.find(Id + "_" + formulaName);
-						if (F_it != varMap.end())
-						{
-							*(F_it->second) = Evaluator.Eval(i, expr);
-							T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
-						}
-
-						B_idx++;
-					}
-					break;
+					continue;
 				}
+
+				int B_idx = 0;
+				for (auto& [formulaName, expr] : Formulas)
+				{
+					auto F_it = varMap.find(Id + "_" + formulaName);
+					if (F_it != varMap.end())
+					{
+						*(F_it->second) = Evaluator.Eval(i, expr);
+						T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
+					}
+
+					B_idx++;
+				}
+				break;
 			}
 		}
 

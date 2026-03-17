@@ -17,13 +17,14 @@
       { "Name": "t_accumulated",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 8 }
     ],
     "Bindings": [
-      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 3, "Offset": 0 },
-      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Size": 3, "Offset": 3 }
+      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 0 },
+      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 6 }
     ],
     "Parameters": {
       "Constants": {
         "k": 1.2,
-        "step_height": 0.30
+        "step_height": 0.30,
+        "max_pitch_norm": 1.0
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -37,10 +38,10 @@
       {
         "Name": "Humanoid_Foot_Ik_Curve",
         "Logic": {
-          "T_gait": "2.0 * (1.0 / (velocity * (bone_l1 + bone_l2)))",
-          "stride_len": "k * sqrt(velocity * (bone_l1 + bone_l2))",
-          "stride_freq": "velocity / (stride_len / 2.0)",
-          "phase_offset": "fmod((t_cycle / T_gait) * 2.0 + offset, 1.0)",
+          "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
+          "stride_freq": "max(velocity, 1e-6) / stride_len",
+          "T_gait": "1.0 / stride_freq",
+          "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
           "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
@@ -50,20 +51,26 @@
             "condition": "linear_cycle < 0.0",
             "offset_x": "-linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "0.0"
+            "offset_z": "0.0",
+            "rot_pitch": "0.0",
+            "rot_yaw": "0.0",
+            "rot_roll": "0.0"
           },
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
             "offset_x": "linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "height_offset * sin(_pi * (linear_cycle ^0.7))"
+            "offset_z": "height_offset * sin(_pi * linear_cycle^0.5)",
+            "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle)",
+            "rot_yaw": "0.0",
+            "rot_roll": "0.0"
           }
         ]
       }
     ],
     "Outputs": [
-      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 0 }
+      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 12, "Offset": 0 }
     ]
   }
 }

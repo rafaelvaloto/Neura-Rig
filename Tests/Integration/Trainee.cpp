@@ -22,8 +22,8 @@ public:
 			torch::nn::ELU()
 		));
 
-		head_r = register_module("head_r", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_r)
-		head_l = register_module("head_l", torch::nn::Linear(hidden, 3));  // 1 Vec (foot_l)
+		head_r = register_module("head_r", torch::nn::Linear(hidden, 6));  // 1 Vec (foot_r)
+		head_l = register_module("head_l", torch::nn::Linear(hidden, 6));  // 1 Vec (foot_l)
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override {
