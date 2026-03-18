@@ -14,7 +14,7 @@ Unlike traditional, mathematically rigid IK solvers, NeuraRig leverages a **Hybr
 
 [🎥 Click and watch the example video on YouTube.](https://www.youtube.com/watch?v=1hWfmAZ5whk)
 
-The project has evolved into **Stage 3**, introducing a logic-driven schema that bridges raw neural inference with procedural animation rules. The system now "understands" the phases of a gait cycle (Stance vs. Swing) in real-time.
+The project has evolved to **Stage 3**, introducing a logic-driven schema that merges pure neural inference with procedural animation rules. The system now "understands" the phases of a gait cycle (Stance vs. Swing) in real-time across multiple skeletal components.
 
 ### 📉 Precision & Convergence
 The neural optimizer demonstrates extreme stability during active training:
@@ -37,18 +37,29 @@ The library processes high-level locomotion parameters and outputs precise IK ta
 
 ### Data Flow (Tensor Mapping)
 ```text
-Inputs (9 floats):
-┌──────────┬─────────────┬─────────────┬──────────┬─────────────┬─────────────┐
-│ Velocity │ Bone L1 R/L │ Bone L2 R/L │ Offsets  │ Cycle Time  │ Accumulated │
-│ [0]      │ [1, 4]      │ [2, 5]      │ [3, 6]   │ [7]         │ [8]         │
-└──────────┴─────────────┴─────────────┴──────────┴─────────────┴─────────────┘
+Inputs (11 floats):
+┌──────────┬─────────────┬─────────────┬──────────┬─────────────┬───────────┬─────────────┐
+│ Velocity │ Bone L1 R/L │ Bone L2 R/L │ Offsets  │ Spacing R/L │ Cycle T   │ Accumulated │
+│ [0]      │ [1, 5]      │ [2, 6]      │ [3, 7]   │ [4, 8]      │ [9]       │ [10]        │
+└──────────┴─────────────┴─────────────┴──────────┴─────────────┴───────────┴─────────────┘
 
-Outputs (6 floats / Vec3):
-┌──────────────────────────┬──────────────────────────┐
-│     Foot R (IK Pos)      │     Foot L (IK Pos)      │
-│     [0, 1, 2]            │     [3, 4, 5]            │
-└──────────────────────────┴──────────────────────────┘
+Outputs (30 floats / Vec3 + Rot):
+┌──────────────────────────┬──────────────────────────┬──────────────────────────┐
+│     Foot R/L (6+6)       │     Ball R/L (6+6)       │     Pelvis (6)           │
+│     [0 - 11]             │     [12 - 23]            │     [24 - 29]            │
+└──────────────────────────┴──────────────────────────┴──────────────────────────┘
 ```
+
+### ⚙️ Gait Engine & Bindings (Schema v3)
+NeuraRig uses a programmable logic layer to define complex movement patterns, allowing the AI to dynamically adapt to different skeletal proportions and velocities.
+
+*   **Temporal Awareness:** Uses `t_cycle` and `t_accumulated` to maintain a continuous, jitter-free motion loop.
+*   **Anatomy Agnostic:** By providing bone lengths (`bone_l1`, `bone_l2`) directly in the logic, the model automatically scales the stride for any character size.
+*   **Multi-Target Bindings:** The system now automatically maps procedural animation curves to multiple targets:
+    *   **Foot IK:** Control of position and pitch of the feet.
+    *   **Ball IK:** Joint articulation (metatarsals) for natural strides.
+    *   **Pelvis IK:** Sway, vertical oscillation (bob), and rotation (yaw/roll) movements of the pelvis based on the walking cycle.
+*   **Phase Switching:** The engine computes the transition between **Stance** (fixed ground contact) and **Swing** (sinusoidal arc) based on a normalized `linear_cycle`.
 
 ## 🚧 Project Status: Prototyping
 
@@ -61,6 +72,8 @@ Outputs (6 floats / Vec3):
 ---
 
 ## 📺 Development Progress
+
+![Neural IK Demo](NewGif.gif)
 
 ![Neural IK Demo](Gif.gif)
 

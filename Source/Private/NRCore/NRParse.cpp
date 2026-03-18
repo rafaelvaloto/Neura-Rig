@@ -34,7 +34,7 @@
 
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable : 4244) // Desativa o aviso de conversão de dados
+#pragma warning(disable : 4244) // Deactivates the data conversion warning
 #endif
 
 #include "muParser.h"
@@ -154,7 +154,7 @@ namespace NR
 		}
 		catch (std::exception& e)
 		{
-			std::cerr << "Erro no JSON: " << e.what() << std::endl;
+			std::cerr << "JSON Error: " << e.what() << std::endl;
 			return false;
 		}
 	}
