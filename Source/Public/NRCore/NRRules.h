@@ -10,6 +10,16 @@ static mu::value_type fmod_wrapper(mu::value_type v1, mu::value_type v2)
 	return std::fmod(v1, v2);
 }
 
+static mu::value_type clamp_wrapper(mu::value_type v, mu::value_type min, mu::value_type max)
+{
+	return std::clamp(v, min, max);
+}
+
+static mu::value_type pow_wrapper(mu::value_type v1, mu::value_type v2)
+{
+	return std::pow(v1, v2);
+}
+
 namespace NR
 {
 	class NRRules
@@ -153,6 +163,8 @@ namespace NR
 			{
 				std::cout << "!hasFmod " << bindingIndex << std::endl;
 				Parsers[bindingIndex].DefineFun("fmod", fmod_wrapper);
+				Parsers[bindingIndex].DefineFun("pow", pow_wrapper);
+				Parsers[bindingIndex].DefineFun("clamp", clamp_wrapper);
 				Parsers[bindingIndex].DefineConst("_pi", 3.1415926535);
 			}
 
