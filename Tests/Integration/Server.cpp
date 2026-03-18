@@ -1,6 +1,18 @@
-Ôªø// Project: NeuraRig
+// Project: NeuraRig
 // Copyright (c) 2026 Rafael Valoto
-// All rights reserved.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "NRCore/NRParse.h"
 #include "NRNetwork/NRNetwork.h"
@@ -18,6 +30,7 @@ class NRMultiHeadModel : public NR::INRModel<float> {
 public:
 	torch::nn::Sequential backbone{nullptr};
 	torch::nn::Linear head_foot_ik{nullptr};
+	torch::nn::Linear head_pelvis_ik{nullptr};
 
 	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t out_size) {
 		backbone = register_module("backbone", torch::nn::Sequential(
@@ -28,12 +41,15 @@ public:
 			torch::nn::ELU()
 		));
 
-		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, out_size));
+		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 24));
+		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override {
 		auto feat = backbone->forward(x);
-		return head_foot_ik->forward(feat);
+		auto h_foots = head_foot_ik->forward(feat);
+		auto h_levis = head_pelvis_ik->forward(feat);
+		return torch::cat({h_foots, h_levis}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override {
@@ -191,7 +207,7 @@ int main()
 			if (dBytes > 0)
 			{
 				uint8_t dHeader = dNetwork.GetHeader();
-				// L√≥gica para tratar comandos de debug recebidos na porta 6004, se necess√°rio.
+				// LÛgica para tratar comandos de debug recebidos na porta 6004, se necess·rio.
 				// Por enquanto apenas logamos.
 				std::cout << "Debug command received on port " << dport << " Header: " << (int)dHeader << std::endl;
 			}

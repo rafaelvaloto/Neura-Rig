@@ -1,6 +1,18 @@
-ï»¿// Project: NeuraRig
+// Project: NeuraRig
 // Copyright (c) 2026 Rafael Valoto
-// All rights reserved.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "NRInterfaces/INRModel.h"
 #include "NRTrainee/NRTrainee.h"
@@ -64,7 +76,7 @@ int main()
 
     std::cout << "Profile loaded: " << MyBotRig.ProfileName << std::endl;
 
-    // 2. Tamanhos automÃ¡ticos baseados no JSON
+    // 2. Tamanhos automáticos baseados no JSON
     int32_t InSize = MyBotRig.GetRequiredInputSize();   // Deve ser 14
     int32_t OutSize = MyBotRig.GetRequiredOutputSize(); // Deve ser 6 (foot_r + foot_l)
 
@@ -100,11 +112,11 @@ int main()
        trainingData[12] = 1.0f;   // has_hit_two (true)
 
        // Time (delta_sec)
-       trainingData[13] = 1.5f;   // No tempo 1.5s, o pÃ© estarÃ¡ em fase de Swing (no ar)
+       trainingData[13] = 1.5f;   // No tempo 1.5s, o pé estará em fase de Swing (no ar)
 
        std::cout << "Data prepared. Targets will be calculated by NRRules during training." << std::endl;
 
-       // 5. Loop de ConvergÃªncia (Overfitting num Ãºnico ponto)
+       // 5. Loop de Convergência (Overfitting num único ponto)
        float last_loss = 0.0f;
        for (int i = 0; i < 5000; ++i)
        {
@@ -124,7 +136,7 @@ int main()
 
        std::cout << "Final Loss: " << last_loss << std::endl;
 
-       // ValidaÃ§Ã£o
+       // Validação
        if (last_loss <= 0.001f) {
           std::cout << "TEST PASSED: Model learned the procedural rule!" << std::endl;
        } else {
