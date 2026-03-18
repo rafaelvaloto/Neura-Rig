@@ -25,7 +25,7 @@
     "Parameters": {
       "Constants": {
         "k": 1.2,
-        "step_height": 0.45,
+        "step_height": 0.25,
         "max_pitch_norm": 1.0,
         "ball_rest_angle": 0.90,
         "ball_bend_angle": 0.45
@@ -56,7 +56,7 @@
             "offset_x": "-linear_cycle * stride_len",
             "offset_y": "0.0",
             "offset_z": "0.0",
-            "rot_pitch": "max_pitch_norm * cos(_pi * 0.9 * linear_cycle)",
+            "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle + 0.1)",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           },
@@ -65,8 +65,8 @@
             "condition": "linear_cycle >= 0.0",
             "offset_x": "linear_cycle * stride_len",
             "offset_y": "0.0",
-            "offset_z": "height_offset * sin(_pi * linear_cycle^0.5)",
-            "rot_pitch": "max_pitch_norm * cos(_pi * 0.9 * linear_cycle)",
+            "offset_z": "height_offset * sin(_pi * linear_cycle)",
+            "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle)",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           }
@@ -88,7 +88,7 @@
             "offset_x": "0.0",
             "offset_y": "0.0",
             "offset_z": "0.0",
-            "rot_pitch": "ball_rest_angle - cos(_pi * (linear_cycle + 0.3)) * ball_bend_angle",
+            "rot_pitch": "ball_rest_angle - cos(_pi * (linear_cycle + 0.1)) * ball_bend_angle",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           },
@@ -98,7 +98,7 @@
             "offset_x": "0.0",
             "offset_y": "0.0",
             "offset_z": "0.0",
-            "rot_pitch": "ball_rest_angle - cos(_pi * linear_cycle + 0.1) * ball_bend_angle",
+            "rot_pitch": "ball_rest_angle - cos(_pi * linear_cycle + 0.3) * ball_bend_angle",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           }
