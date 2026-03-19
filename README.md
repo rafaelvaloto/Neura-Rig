@@ -12,7 +12,7 @@ Unlike traditional, mathematically rigid IK solvers, NeuraRig leverages a **Hybr
 
 ## 🚀 Breakthrough: Hybrid Neural Stride Logic
 
-[🎥 Click and watch the example video on YouTube.](https://www.youtube.com/watch?v=1hWfmAZ5whk)
+[🎥 Click and watch the example video on YouTube.](https://youtu.be/lBzpDStWPK4?si=y3O7QYNSVFAvkg0w)
 
 The project has evolved to **Stage 3**, introducing a logic-driven schema that merges pure neural inference with procedural animation rules. The system now "understands" the phases of a gait cycle (Stance vs. Swing) in real-time across multiple skeletal components.
 
@@ -73,7 +73,7 @@ NeuraRig uses a programmable logic layer to define complex movement patterns, al
 
 ## 📺 Development Progress
 
-![Neural IK Demo](atGif.gif)
+![Neural IK Demo](AtGif.gif)
 
 *The AI successfully learns to optimize the stride curve, achieving fluid movement and maintaining balance through real-time weight shift predictions.*
 
