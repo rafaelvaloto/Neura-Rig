@@ -17,7 +17,8 @@
       { "Name": "spacing_l",        "Space": "-", "Type": "float", "Size": 1, "Offset": 8 },
 
       { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 9 },
-      { "Name": "t_accumulated",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 10 }
+      { "Name": "time_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 10 },
+      { "Name": "t_accumulated",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 11 }
     ],
     "Bindings": [
       { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 0 },
@@ -28,15 +29,12 @@
     ],
     "Parameters": {
       "Constants": {
-        "k": 1.2,
+        "k": 1.5,
+        "gait_scale": 1.5,
         "step_height": 0.25,
         "max_pitch_norm": 1.0,
         "ball_rest_angle": 0.90,
-        "ball_bend_angle": 0.45,
-        "pelvis_bob_height": 1.5,
-        "pelvis_sway_width": 3.0,
-        "pelvis_yaw_angle": 8.0,
-        "pelvis_roll_angle": 3.0
+        "ball_bend_angle": 0.45
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -53,7 +51,7 @@
         "Logic": {
           "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
           "stride_freq": "max(velocity, 1e-6) / stride_len",
-          "T_gait": "1.0 / stride_freq",
+          "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
           "height_offset": "min(bone_l2 * 0.6, step_height)"
@@ -86,7 +84,7 @@
         "Logic": {
           "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
           "stride_freq": "max(velocity, 1e-6) / stride_len",
-          "T_gait": "1.0 / stride_freq",
+          "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0"
         },
@@ -118,7 +116,7 @@
         "Logic": {
           "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
           "stride_freq": "max(velocity, 1e-6) / stride_len",
-          "T_gait": "1.0 / stride_freq",
+          "T_gait": "(1.0 / stride_freq) * gait_scale",
           "cycle": "fmod(t_cycle / T_gait, 1.0)",
           "linear_cycle": "2.0 * cycle - 1.0"
         },
@@ -127,11 +125,11 @@
             "id": "global",
             "condition": "1.0",
             "offset_x": "0.0",
-            "offset_y": "-sin(_pi * linear_cycle) * pelvis_sway_width",
-            "offset_z": "(cos(2.0 * _pi * linear_cycle) - 1.0) * pelvis_bob_height",
-            "rot_pitch": "sin(_pi * linear_cycle) * pelvis_roll_angle",
+            "offset_y": "sin(_pi * linear_cycle)",
+            "offset_z": "(cos(2.0 * _pi * linear_cycle) - 1.0) * 0.5",
+            "rot_pitch": "-sin(_pi * linear_cycle)",
             "rot_yaw": "0.0",
-            "rot_roll": "-sin(_pi * linear_cycle) * pelvis_yaw_angle"
+            "rot_roll": "sin(_pi * linear_cycle)"
           }
         ]
       }

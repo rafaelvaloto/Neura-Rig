@@ -163,7 +163,7 @@ namespace NR
 				Vars.reserve(bindingIndex + 8);
 				Vars.push_back({});
 			}
-			else if (bindingIndex >= Parsers.size())
+			if (bindingIndex >= Parsers.size())
 			{
 				mu::Parser newParser;
 				Parsers.push_back(newParser);

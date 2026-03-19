@@ -89,10 +89,10 @@ int main()
 
 	auto InputSize = activeProfile.GetRequiredInputSize();
 	auto out_size = activeProfile.GetRequiredOutputSize();
-	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512, out_size);
+	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 256, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 1e-4);
+	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 2e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork dNetwork;
@@ -135,7 +135,10 @@ int main()
 							std::cout << " Loss: " << loss << std::endl;
 							std::cout << " frame counter:" << frameCounter << std::endl;
 							std::cout << "----------------------------------" << std::endl;
+
+
 						}
+
 
 						if (trainee->IdealTargets.defined())
 						{
@@ -153,45 +156,45 @@ int main()
 							dNetwork.Send(dSendBuffer.data(), dTotalPayloadSize);
 						}
 
-						if (trainee->Predicated.defined())
+						// if (trainee->Predicated.defined())
+						// {
+						// 	std::vector<uint8_t> SendBuffer;
+						// 	SendBuffer.push_back(0x03); // Header debug - IdealTarg
+						//
+						// 	// Convertendo o tensor IdealTarg para um array de bytes
+						// 	const float* DataPtr = trainee->Predicated.data_ptr<float>();
+						// 	size_t NumElements = trainee->Predicated.numel();
+						// 	size_t BytesToCopy = NumElements * sizeof(float);
+						// 	auto* BytePtr = reinterpret_cast<const uint8_t*>(DataPtr);
+						//
+						// 	SendBuffer.insert(SendBuffer.end(), BytePtr, BytePtr + BytesToCopy);
+						// 	size_t TotalPayloadSize = SendBuffer.size();
+						// 	Network.Send(SendBuffer.data(), TotalPayloadSize);
+						// }
+
+						if (!solver && loss < 0.00001)
 						{
-							std::vector<uint8_t> SendBuffer;
-							SendBuffer.push_back(0x03); // Header debug - IdealTarg
-
-							// Convertendo o tensor IdealTarg para um array de bytes
-							const float* DataPtr = trainee->Predicated.data_ptr<float>();
-							size_t NumElements = trainee->Predicated.numel();
-							size_t BytesToCopy = NumElements * sizeof(float);
-							auto* BytePtr = reinterpret_cast<const uint8_t*>(DataPtr);
-
-							SendBuffer.insert(SendBuffer.end(), BytePtr, BytePtr + BytesToCopy);
-							size_t TotalPayloadSize = SendBuffer.size();
-							Network.Send(SendBuffer.data(), TotalPayloadSize);
+							solver = std::make_shared<NRSolver>(model, activeProfile);
+							std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
 						}
 
-						// if (!solver && loss < 0.00001)
-						// {
-						// 	solver = std::make_shared<NRSolver>(model, activeProfile);
-						// 	std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
-						// }
-						//
-						// if (solver)
-						// {
-						// 	std::vector<float> solveInput(InputSize);
-						// 	std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
-						//
-						// 	std::vector<float> predicted = solver->Solve(solveInput);
-						//
-						// 	std::vector<uint8_t> sendBuffer;
-						// 	sendBuffer.push_back(0x03); // Header
-						//
-						// 	size_t bytesToCopy = predicted.size() * sizeof(float);
-						// 	auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
-						//
-						// 	sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-						// 	size_t totalPayloadSize = sendBuffer.size();
-						// 	Network.Send(sendBuffer.data(), totalPayloadSize);
-						// }
+						if (solver)
+						{
+							std::vector<float> solveInput(InputSize);
+							std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+
+							std::vector<float> predicted = solver->Solve(solveInput);
+
+							std::vector<uint8_t> sendBuffer;
+							sendBuffer.push_back(0x03); // Header
+
+							size_t bytesToCopy = predicted.size() * sizeof(float);
+							auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
+
+							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
+							size_t totalPayloadSize = sendBuffer.size();
+							Network.Send(sendBuffer.data(), totalPayloadSize);
+						}
 					}
 				}
 			}
@@ -207,7 +210,7 @@ int main()
 			if (dBytes > 0)
 			{
 				uint8_t dHeader = dNetwork.GetHeader();
-				// Lógica para tratar comandos de debug recebidos na porta 6004, se necessário.
+				// Lï¿½gica para tratar comandos de debug recebidos na porta 6004, se necessï¿½rio.
 				// Por enquanto apenas logamos.
 				std::cout << "Debug command received on port " << dport << " Header: " << (int)dHeader << std::endl;
 			}

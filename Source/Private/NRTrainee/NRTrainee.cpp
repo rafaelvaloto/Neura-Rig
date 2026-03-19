@@ -139,7 +139,7 @@ namespace NR
 		IdealTargets = T_ideal;
 
 		const auto PosLoss = torch::mse_loss(Pred, T_ideal);
-		const auto TotalLoss = (PosLoss* 1.0f);
+		const auto TotalLoss = (PosLoss* 0.1f);
 		return IKLossResult(TotalLoss, PosLoss, PosLoss, PosLoss);
 	}
 
