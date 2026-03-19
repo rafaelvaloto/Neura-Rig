@@ -75,6 +75,10 @@ NeuraRig uses a programmable logic layer to define complex movement patterns, al
 
 ![Neural IK Demo](AtGif.gif)
 
+![Neural IK Demo](Gif2.gif)
+
+![Neural IK Demo](Gif3.gif)
+
 *The AI successfully learns to optimize the stride curve, achieving fluid movement and maintaining balance through real-time weight shift predictions.*
 
 ---
