@@ -31,6 +31,7 @@ public:
 	torch::nn::Sequential backbone{nullptr};
 	torch::nn::Linear head_foot_ik{nullptr};
 	torch::nn::Linear head_pelvis_ik{nullptr};
+	torch::nn::Linear head_spine_ik{nullptr};
 
 	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t out_size) {
 		backbone = register_module("backbone", torch::nn::Sequential(
@@ -43,13 +44,16 @@ public:
 
 		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 24));
 		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
+		head_spine_ik = register_module("head_spine_ik", torch::nn::Linear(hidden, 6));
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override {
 		auto feat = backbone->forward(x);
 		auto h_foots = head_foot_ik->forward(feat);
-		auto h_levis = head_pelvis_ik->forward(feat);
-		return torch::cat({h_foots, h_levis}, 1);
+		auto h_spine = head_spine_ik->forward(feat);
+		auto h_pelvis = head_pelvis_ik->forward(feat);
+
+		return torch::cat({h_foots, h_pelvis, h_spine}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override {
@@ -92,7 +96,7 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 256, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 2e-3);
+	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 3e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork dNetwork;
@@ -135,8 +139,6 @@ int main()
 							std::cout << " Loss: " << loss << std::endl;
 							std::cout << " frame counter:" << frameCounter << std::endl;
 							std::cout << "----------------------------------" << std::endl;
-
-
 						}
 
 

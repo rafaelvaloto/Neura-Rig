@@ -25,11 +25,12 @@
       { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 6 },
       { "Name": "ball_r", "Target": "Humanoid_Ball_Ik_Curve", "Size": 6, "Offset": 12},
       { "Name": "ball_l", "Target": "Humanoid_Ball_Ik_Curve", "Size": 6, "Offset": 18},
-      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik_Curve", "Size": 6, "Offset": 24}
+      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik_Curve", "Size": 6, "Offset": 24},
+      { "Name": "spine",  "Target": "Humanoid_Spine_Ik_Curve", "Size": 6, "Offset": 30}
     ],
     "Parameters": {
       "Constants": {
-        "k": 1.5,
+        "k": 1.8,
         "gait_scale": 1.5,
         "step_height": 0.25,
         "max_pitch_norm": 1.0,
@@ -132,11 +133,56 @@
             "rot_roll": "sin(_pi * linear_cycle)"
           }
         ]
+      },
+      {
+        "Name": "Humanoid_Spine_Ik_Curve",
+        "Logic": {
+          "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
+          "stride_freq": "max(velocity, 1e-6) / stride_len",
+          "T_gait": "(1.0 / stride_freq) * gait_scale",
+          "cycle": "fmod(t_cycle / T_gait, 1.0)",
+          "linear_cycle": "2.0 * cycle - 1.0"
+        },
+        "Phases": [
+          {
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "0.0",
+            "offset_y": "0.0",
+            "offset_z": "0.0",
+            "rot_pitch": "clamp(velocity / 1.0, 0.0, 1.0)",
+            "rot_yaw": "-sin(_pi * linear_cycle)",
+            "rot_roll": "-sin(_pi * linear_cycle) * 0.5"
+          }
+        ]
+      },
+      {
+        "Name": "Humanoid_Arm_Ik_Curve",
+        "Logic": {
+          "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
+          "stride_freq": "max(velocity, 1e-6) / stride_len",
+          "T_gait": "(1.0 / stride_freq) * gait_scale",
+          "cycle": "fmod(t_cycle / T_gait, 1.0)",
+          "linear_cycle": "2.0 * cycle - 1.0"
+        },
+        "Phases": [
+          {
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "0.0",
+            "offset_y": "0.0",
+            "offset_z": "0.0",
+            "rot_pitch": "sin(_pi * linear_cycle)",
+            "rot_yaw": "0.0",
+            "rot_roll": "(cos(2.0 * _pi * linear_cycle) - 1.0) * 0.5"
+          }
+        ]
       }
     ],
     "Outputs": [
       { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 24, "Offset": 0 },
-      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 24 }
+      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 24 },
+      { "Name": "spine_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 30 }
     ]
   }
 }
