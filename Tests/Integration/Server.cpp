@@ -42,7 +42,7 @@ public:
 			torch::nn::ELU()
 		));
 
-		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 24));
+		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 48));
 		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
 		head_spine_ik = register_module("head_spine_ik", torch::nn::Linear(hidden, 6));
 	}
@@ -96,7 +96,7 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 256, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 3e-3);
+	auto trainee = std::make_shared<NRTrainee<float>>(model, activeProfile, activeRules, 4e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	NRNetwork dNetwork;
@@ -149,13 +149,12 @@ int main()
 
 							// Convertendo o tensor IdealTarg para um array de bytes
 							const float* dDataPtr = trainee->IdealTargets.data_ptr<float>();
-							size_t dNumElements = trainee->IdealTargets.numel();
-							size_t dBytesToCopy = dNumElements * sizeof(float);
+							auto dNumElements = trainee->IdealTargets.numel();
+							auto dBytesToCopy = dNumElements * sizeof(float);
 							auto* dBytePtr = reinterpret_cast<const uint8_t*>(dDataPtr);
 
 							dSendBuffer.insert(dSendBuffer.end(), dBytePtr, dBytePtr + dBytesToCopy);
-							size_t dTotalPayloadSize = dSendBuffer.size();
-							dNetwork.Send(dSendBuffer.data(), dTotalPayloadSize);
+							dNetwork.Send(dSendBuffer.data(), dSendBuffer.size());
 						}
 
 						// if (trainee->Predicated.defined())
@@ -182,20 +181,19 @@ int main()
 
 						if (solver)
 						{
-							std::vector<float> solveInput(InputSize);
-							std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+							// std::vector<float> solveInput(InputSize);
+							// std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
 
-							std::vector<float> predicted = solver->Solve(solveInput);
+							std::vector<float> predicted = solver->Solve(data);
 
 							std::vector<uint8_t> sendBuffer;
 							sendBuffer.push_back(0x03); // Header
 
-							size_t bytesToCopy = predicted.size() * sizeof(float);
+							auto bytesToCopy = predicted.size() * sizeof(float);
 							auto* bytePtr = reinterpret_cast<uint8_t*>(predicted.data());
 
 							sendBuffer.insert(sendBuffer.end(), bytePtr, bytePtr + bytesToCopy);
-							size_t totalPayloadSize = sendBuffer.size();
-							Network.Send(sendBuffer.data(), totalPayloadSize);
+							Network.Send(sendBuffer.data(), sendBuffer.size());
 						}
 					}
 				}

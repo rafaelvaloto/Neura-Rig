@@ -25,17 +25,19 @@
       { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 6 },
       { "Name": "ball_r", "Target": "Humanoid_Ball_Ik_Curve", "Size": 6, "Offset": 12},
       { "Name": "ball_l", "Target": "Humanoid_Ball_Ik_Curve", "Size": 6, "Offset": 18},
-      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik_Curve", "Size": 6, "Offset": 24},
-      { "Name": "spine",  "Target": "Humanoid_Spine_Ik_Curve", "Size": 6, "Offset": 30}
+      { "Name": "calf_r", "Target": "Humanoid_Calf_Ik_Curve", "Size": 6, "Offset": 24},
+      { "Name": "calf_l", "Target": "Humanoid_Calf_Ik_Curve", "Size": 6, "Offset": 30},
+      { "Name": "thigh_r", "Target": "Humanoid_Thigh_Ik_Curve", "Size": 6, "Offset": 36},
+      { "Name": "thigh_l", "Target": "Humanoid_Thigh_Ik_Curve", "Size": 6, "Offset": 42},
+      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik_Curve", "Size": 6, "Offset": 48},
+      { "Name": "spine",  "Target": "Humanoid_Spine_Ik_Curve", "Size": 6, "Offset": 54}
     ],
     "Parameters": {
       "Constants": {
-        "k": 1.8,
-        "gait_scale": 1.5,
-        "step_height": 0.25,
-        "max_pitch_norm": 1.0,
-        "ball_rest_angle": 0.90,
-        "ball_bend_angle": 0.45
+        "k": 1.2,
+        "gait_scale": 0.8,
+        "step_height": 0.55,
+        "max_pitch_norm": 0.65
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -61,17 +63,17 @@
           {
             "id": "stance",
             "condition": "linear_cycle < 0.0",
-            "offset_x": "-linear_cycle * stride_len",
+            "offset_x": "-(linear_cycle + 0.5) * stride_len",
             "offset_y": "spacing",
             "offset_z": "0.0",
-            "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle + 0.1)",
+            "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle)",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           },
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
-            "offset_x": "linear_cycle * stride_len",
+            "offset_x": "(linear_cycle - 0.5) * stride_len",
             "offset_y": "spacing + (spacing * 0.2 * sin(_pi * linear_cycle))",
             "offset_z": "height_offset * sin(_pi * linear_cycle)",
             "rot_pitch": "max_pitch_norm * cos(_pi * linear_cycle)",
@@ -96,7 +98,7 @@
             "offset_x": "0.0",
             "offset_y": "0.0",
             "offset_z": "0.0",
-            "rot_pitch": "ball_rest_angle - cos(_pi * (linear_cycle + 0.05)) * ball_bend_angle",
+            "rot_pitch": "sin(_pi * linear_cycle - 0.8)",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           },
@@ -106,12 +108,68 @@
             "offset_x": "0.0",
             "offset_y": "0.0",
             "offset_z": "0.0",
-            "rot_pitch": "ball_rest_angle - cos(_pi * linear_cycle + 0.15) * ball_bend_angle",
+            "rot_pitch": "sin(_pi * linear_cycle - 0.2)",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
           }
         ]
       },
+      [
+        {
+          "Name": "Humanoid_Thigh_Ik_Curve",
+          "Logic": {
+            "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
+            "stride_freq": "max(velocity, 1e-6) / stride_len",
+            "T_gait": "(1.0 / stride_freq) * gait_scale",
+            "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
+            "linear_cycle": "2.0 * phase_offset - 1.0"
+          },
+          "Phases": [
+            {
+              "id": "global",
+              "condition": "true",
+              "offset_x": "0.0",
+              "offset_y": "0.0",
+              "offset_z": "0.0",
+              "rot_pitch": "-cos(_pi * linear_cycle)",
+              "rot_yaw": "0.0",
+              "rot_roll": "0.0"
+            }
+          ]
+        },
+        {
+          "Name": "Humanoid_Calf_Ik_Curve",
+          "Logic": {
+            "stride_len": "k * (bone_l1 + bone_l2) * sqrt(max(velocity, 1e-6) / (bone_l1 + bone_l2))",
+            "stride_freq": "max(velocity, 1e-6) / stride_len",
+            "T_gait": "(1.0 / stride_freq) * gait_scale",
+            "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
+            "linear_cycle": "2.0 * phase_offset - 1.0"
+          },
+          "Phases": [
+            {
+              "id": "stance",
+              "condition": "linear_cycle < 0.0",
+              "offset_x": "0.0",
+              "offset_y": "0.0",
+              "offset_z": "0.0",
+              "rot_pitch": "0.0",
+              "rot_yaw": "0.0",
+              "rot_roll": "0.0"
+            },
+            {
+              "id": "swing",
+              "condition": "linear_cycle >= 0.0",
+              "offset_x": "0.0",
+              "offset_y": "0.0",
+              "offset_z": "0.0",
+              "rot_pitch": "sin(_pi * linear_cycle)",
+              "rot_yaw": "0.0",
+              "rot_roll": "0.0"
+            }
+          ]
+        }
+      ],
       {
         "Name": "Humanoid_Pelvis_Ik_Curve",
         "Logic": {
@@ -180,9 +238,9 @@
       }
     ],
     "Outputs": [
-      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 24, "Offset": 0 },
-      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 24 },
-      { "Name": "spine_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 30 }
+      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 48, "Offset": 0 },
+      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 48 },
+      { "Name": "spine_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 54 }
     ]
   }
 }
