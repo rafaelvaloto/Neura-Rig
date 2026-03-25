@@ -154,20 +154,21 @@ namespace NR
 	private:
 		void EnsureBinding(int bindingIndex)
 		{
-			if (Parsers.size() == 0)
+			if (Parsers.empty())
 			{
 				mu::Parser newParser;
-				Parsers.reserve(bindingIndex + 8);
+				Parsers.reserve(bindingIndex + 30);
 				Parsers.push_back(newParser);
 
-				Vars.reserve(bindingIndex + 8);
-				Vars.push_back({});
+				Vars.reserve(bindingIndex + 30);
+				Vars.emplace_back();
 			}
+
 			if (bindingIndex >= Parsers.size())
 			{
 				mu::Parser newParser;
 				Parsers.push_back(newParser);
-				Vars.push_back({});
+				Vars.emplace_back();
 				std::cout << "Binding " << bindingIndex << std::endl;
 			}
 

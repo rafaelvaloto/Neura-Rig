@@ -57,7 +57,7 @@ namespace NR
 		 * @param Ev
 		 * @param LearningRate
 		 */
-		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, const NRModelProfile& Rig, const NRRules& Ev, double LearningRate = 1e-3);
+		NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile  Rig, NRRules& Ev, double LearningRate = 1e-3);
 
 		/**
 		 * Executes the next step in the training process by determining the current stage.

@@ -99,8 +99,11 @@ namespace NR
 		 *
 		 * Stores up to 32KB of incoming UDP/TCP packet data before parsing
 		 * into structured format. Size must accommodate maximum expected payload.
+		 * We use alignas(4) to ensure that inBuffer[0] is at a 4-byte boundary.
+		 * Since inBuffer[0] is the header (1 byte), inBuffer[1] is NOT aligned to 4 bytes.
+		 * This is problematic for reinterpret_cast<float*>(&inBuffer[1]).
 		 */
-		char inBuffer[32768] = {};
+		alignas(16) char inBuffer[32768] = {};
 
 		/**
 		 * @brief Packet header identifying the data type or protocol version.

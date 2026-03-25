@@ -30,10 +30,11 @@ class NRMultiHeadModel : public NR::INRModel<float> {
 public:
 	torch::nn::Sequential backbone{nullptr};
 	torch::nn::Linear head_foot_ik{nullptr};
+	torch::nn::Linear head_leg_ik{nullptr};
 	torch::nn::Linear head_pelvis_ik{nullptr};
 	torch::nn::Linear head_spine_ik{nullptr};
 
-	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t out_size) {
+	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t /*out_size*/) {
 		backbone = register_module("backbone", torch::nn::Sequential(
 			torch::nn::Linear(in_size, hidden),
 			torch::nn::LayerNorm(torch::nn::LayerNormOptions({hidden})),
@@ -42,7 +43,8 @@ public:
 			torch::nn::ELU()
 		));
 
-		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 48));
+		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 36));
+		head_leg_ik = register_module("head_leg_ik", torch::nn::Linear(hidden, 12));
 		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
 		head_spine_ik = register_module("head_spine_ik", torch::nn::Linear(hidden, 6));
 	}
@@ -50,10 +52,10 @@ public:
 	torch::Tensor Forward(torch::Tensor x) override {
 		auto feat = backbone->forward(x);
 		auto h_foots = head_foot_ik->forward(feat);
+		auto h_legs = head_leg_ik->forward(feat);
 		auto h_spine = head_spine_ik->forward(feat);
 		auto h_pelvis = head_pelvis_ik->forward(feat);
-
-		return torch::cat({h_foots, h_pelvis, h_spine}, 1);
+		return torch::cat({h_foots, h_legs, h_pelvis, h_spine}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override {
@@ -105,7 +107,6 @@ int main()
 	if (!dNetwork.StartServer(dport))
 	{
 		std::cout << "Failed to start debug server on port " << dport << std::endl;
-		trainee->Reset();
 		return 1;
 	}
 
@@ -130,8 +131,21 @@ int main()
 				{
 					std::vector<float> data;
 					Network.GetData(data);
+
+					if (data.empty())
+					{
+						continue;
+					}
+
 					if (trainee)
 					{
+						int32_t requiredSize = activeProfile.GetRequiredInputSize();
+						if (data.size() < static_cast<size_t>(requiredSize))
+						{
+							std::cerr << "[Server] Incomplete data received: " << data.size() << " floats, expected at least " << requiredSize << std::endl;
+							continue;
+						}
+
 						float loss = trainee->TrainStep(data);
 						if (frameCounter++ % 30 == 0)
 						{
@@ -140,7 +154,6 @@ int main()
 							std::cout << " frame counter:" << frameCounter << std::endl;
 							std::cout << "----------------------------------" << std::endl;
 						}
-
 
 						if (trainee->IdealTargets.defined())
 						{
@@ -157,22 +170,6 @@ int main()
 							dNetwork.Send(dSendBuffer.data(), dSendBuffer.size());
 						}
 
-						// if (trainee->Predicated.defined())
-						// {
-						// 	std::vector<uint8_t> SendBuffer;
-						// 	SendBuffer.push_back(0x03); // Header debug - IdealTarg
-						//
-						// 	// Convertendo o tensor IdealTarg para um array de bytes
-						// 	const float* DataPtr = trainee->Predicated.data_ptr<float>();
-						// 	size_t NumElements = trainee->Predicated.numel();
-						// 	size_t BytesToCopy = NumElements * sizeof(float);
-						// 	auto* BytePtr = reinterpret_cast<const uint8_t*>(DataPtr);
-						//
-						// 	SendBuffer.insert(SendBuffer.end(), BytePtr, BytePtr + BytesToCopy);
-						// 	size_t TotalPayloadSize = SendBuffer.size();
-						// 	Network.Send(SendBuffer.data(), TotalPayloadSize);
-						// }
-
 						if (!solver && loss < 0.00001)
 						{
 							solver = std::make_shared<NRSolver>(model, activeProfile);
@@ -181,10 +178,10 @@ int main()
 
 						if (solver)
 						{
-							// std::vector<float> solveInput(InputSize);
-							// std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
+							std::vector<float> solveInput(InputSize);
+							std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
 
-							std::vector<float> predicted = solver->Solve(data);
+							std::vector<float> predicted = solver->Solve(solveInput);
 
 							std::vector<uint8_t> sendBuffer;
 							sendBuffer.push_back(0x03); // Header
@@ -216,7 +213,5 @@ int main()
 			}
 		}
 	}
-
-	trainee->Reset();
 	return 0;
 }

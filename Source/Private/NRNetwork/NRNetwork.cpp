@@ -61,22 +61,22 @@ namespace NR
 	template<typename T>
 	void NRNetwork::GetData(std::vector<T>& OutBuffer)
 	{
+		if (payloadSize <= 0)
+		{
+			OutBuffer.clear();
+			return;
+		}
+
 		if constexpr (std::is_same_v<T, float>)
 		{
-			if (payloadSize > 0)
-			{
-				const auto count = (payloadSize / sizeof(float));
-				auto data = reinterpret_cast<const float*>(&inBuffer[1]);
-				OutBuffer.assign(data, data + count);
-			}
+			const auto count = (payloadSize / sizeof(float));
+			OutBuffer.resize(count);
+			std::memcpy(OutBuffer.data(), &inBuffer[1], count * sizeof(float));
 		}
 		else if constexpr (std::is_same_v<T, uint8_t>)
 		{
-			if (payloadSize > 0)
-			{
-				auto data = reinterpret_cast<const uint8_t*>(&inBuffer[1]);
-				OutBuffer.assign(data, data + payloadSize);
-			}
+			OutBuffer.resize(payloadSize);
+			std::memcpy(OutBuffer.data(), &inBuffer[1], payloadSize);
 		}
 	}
 

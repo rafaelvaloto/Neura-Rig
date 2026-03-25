@@ -65,21 +65,25 @@ namespace NR
 		std::string Expr;
 	};
 
-	struct NRRule {
+	struct NRRule
+	{
 		std::string Name;
 		std::map<std::string, double> Constants;
 		std::vector<NRVars> Variables;
 		std::vector<NRLogic> Logic;
 
-		struct Phase {
+		struct Phase
+		{
 			std::string Id;
 			std::string Condition;
 			std::vector<NRFormula> Formulas;
 		};
+
 		std::vector<Phase> Phases;
 	};
 
-	struct NRBinding {
+	struct NRBinding
+	{
 		std::string BoneName;
 		std::string RuleName;
 		std::vector<NRRule> Rules;
@@ -108,7 +112,8 @@ namespace NR
 		{
 			for (const auto& rule : Bindings[index].Rules)
 			{
-				if (rule.Name == name) return rule;
+				if (rule.Name == name)
+					return rule;
 			}
 			return {};
 		}
@@ -134,7 +139,7 @@ namespace NR
 					return Input.slice(dimToSlice, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor(); // Retorna vazio se não achar o nome
+			return torch::Tensor(); // Retorna vazio se nï¿½o achar o nome
 		}
 
 		[[nodiscard]] torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const

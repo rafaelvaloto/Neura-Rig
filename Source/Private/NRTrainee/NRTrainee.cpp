@@ -23,10 +23,10 @@
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, const NRModelProfile& Rig, const NRRules& Ev, const double LearningRate)
+	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile  Rig, NRRules& Ev, const double LearningRate)
 		: TargetModel(TargetModel)
 		  , Evaluator(Ev)
-		  , RigDesc(Rig)
+		  , RigDesc(std::move(Rig))
 	{
 		Optimizer = std::make_unique<torch::optim::Adam>(TargetModel->parameters(), torch::optim::AdamOptions(LearningRate));
 
@@ -180,7 +180,8 @@ namespace NR
 		for (auto& deq : IdealXHistory)
 			deq.clear();
 
-		IdealTargets = torch::Tensor();
+		IdealTargets = torch::zeros({1, RigDesc.GetRequiredOutputSize()});
+		Predicated = torch::zeros({1, RigDesc.GetRequiredOutputSize()});
 		std::cout << "[NRTrainee] Reset complete. Clean state for training." << std::endl;
 	}
 
