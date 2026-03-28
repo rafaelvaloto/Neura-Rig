@@ -1,15 +1,15 @@
 ﻿# 1. Find source files
-set(TRAINEE_SOURCES "Integration/Trainee.cpp")
-set(SERVER_SOURCES "Integration/Server.cpp")
-set(RULES_SOURCES "Integration/Rules.cpp")
+set(NETWORK_SOURCES "Integration/TestNewNetwork.cpp")
+set(SERVER_SOURCES "Integration/TestTrainerMachine.cpp")
 
 # 2. Create executables
+add_executable(NRTestNetwork ${NETWORK_SOURCES})
 add_executable(NRTestRules ${RULES_SOURCES})
 add_executable(NRTestTrain ${TRAINEE_SOURCES})
 add_executable(NRTestServer ${SERVER_SOURCES})
 
 # 3. Configure compilation options
-foreach(TARGET_NAME NRTestServer NRTestTrain NRTestRules)
+foreach(TARGET_NAME NRTestServer NRTestTrain NRTestRules NRTestNetwork)
     if (MSVC)
         # Opções gerais
         target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)

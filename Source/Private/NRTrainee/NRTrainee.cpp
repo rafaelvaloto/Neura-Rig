@@ -23,7 +23,7 @@
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile  Rig, NRRules& Ev, const double LearningRate)
+	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules& Ev, const double LearningRate)
 		: TargetModel(TargetModel)
 		  , Evaluator(Ev)
 		  , RigDesc(std::move(Rig))
@@ -62,7 +62,7 @@ namespace NR
 
 		Optimizer->zero_grad();
 		auto Prediction = TargetModel->Forward(InputTensor);
-		auto [TotalLoss, PosLoss, RotationLoss, RegLoss] = ComputeRLReward(InputTensor, Prediction);
+		auto [TotalLoss, PosLoss, RotationLoss, RegLoss, FKLoss] = ComputeRLReward(InputTensor, Prediction);
 
 		TotalLoss.backward();
 		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
@@ -71,12 +71,12 @@ namespace NR
 		return TotalLoss.template item<float>();
 	}
 
+	int frameCounter = 0;
 	template<FloatingPoint T>
-	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const  torch::Tensor& Pred)
+	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
-		auto T_ideal = torch::zeros_like(Pred);
+		const auto T_ideal = torch::zeros_like(Pred);
 		auto B_size = RigDesc.Bindings.size();
-
 		for (auto i = 0; i < B_size; ++i)
 		{
 			auto& varMap = Evaluator.Parsers[i].GetVar();
@@ -93,21 +93,24 @@ namespace NR
 				}
 
 				Evaluator.SetTensorInputs(i, F_rule, RigDesc, InputTensor);
-				for (auto& logic : F_rule.Logic)
+				for (auto& [Name, Expr] : F_rule.Logic)
 				{
-					auto it = varMap.find(logic.Name);
-					if (it == varMap.end()) {
-						std::cerr << "[NRTrainee] Logic variable not found: " << logic.Name << std::endl;
+					auto it = varMap.find(Name);
+					if (it == varMap.end())
+					{
+						std::cerr << "[NRTrainee] Logic variable not found: " << Name << std::endl;
 						continue;
 					}
 
-					*(it->second) = Evaluator.Eval(i, logic.Expr);
+					*(it->second) = Evaluator.Eval(i, Expr);
 				}
 
 				for (auto& [Id, Condition, Formulas] : F_rule.Phases)
 				{
-					auto it = varMap.find(Id + "_condition");
-					if (it == varMap.end()) {
+					auto F_x = Id + "_condition";
+					auto it = varMap.find(F_x);
+					if (it == varMap.end())
+					{
 						std::cerr << "[NRTrainee] Phase condition variable not found: " << Id + "_condition" << std::endl;
 						continue;
 					}
@@ -121,8 +124,8 @@ namespace NR
 					int B_idx = 0;
 					for (auto& [formulaName, expr] : Formulas)
 					{
-						auto F_it = varMap.find(Id + "_" + formulaName);
-						if (F_it != varMap.end())
+						auto k = Id + "_" + formulaName;
+						if (auto F_it = varMap.find(k); F_it != varMap.end())
 						{
 							*(F_it->second) = Evaluator.Eval(i, expr);
 							T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
@@ -135,12 +138,43 @@ namespace NR
 			}
 		}
 
+		std::vector<int64_t> ROffsets;
+		ROffsets.reserve(2);
+		std::vector<int64_t> LOffsets;
+		LOffsets.reserve(2);
+		for (size_t i = 0; i < B_size; ++i)
+		{
+			auto& Bindings = RigDesc.Bindings[i];
+
+			if (Bindings.BoneName == "calf_r") ROffsets.push_back(Bindings.Offset + 3);
+			else if (Bindings.BoneName == "thigh_r") ROffsets.push_back(Bindings.Offset + 3);
+			else if (Bindings.BoneName == "calf_l") LOffsets.push_back(Bindings.Offset + 3);
+			else if (Bindings.BoneName == "thigh_l") LOffsets.push_back(Bindings.Offset + 3);
+		}
+
 		Predicated = Pred;
 		IdealTargets = T_ideal;
 
-		const auto PosLoss = torch::mse_loss(Pred, T_ideal);
-		const auto TotalLoss = (PosLoss* 0.1f);
-		return IKLossResult(TotalLoss, PosLoss, PosLoss, PosLoss);
+		auto P1_xyz = Pred.index({0, torch::indexing::Slice(0, 3)});
+		auto P2_xyz = Pred.index({0, torch::indexing::Slice(6, 9)});
+		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(0, 3)});
+		auto T2_xyz = T_ideal.index({0, torch::indexing::Slice(6, 9)});
+
+
+		auto FK = ValidateFeetFK(Pred, LOffsets, ROffsets, false);
+		const auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
+		const auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
+
+		// Loss total
+		const auto P1Loss = Pos1Loss + Pos2Loss *1.0;
+		const auto TotalLoss = P1Loss + (FK.err_loss * 5.5);
+
+		if (frameCounter++ % 30 == 0)
+		{
+			std::cout << "Frame: " << frameCounter << std::endl;
+			std::cout << "Total: " << TotalLoss.item<float>() << std::endl;
+		}
+		return IKLossResult(TotalLoss, TotalLoss, TotalLoss, TotalLoss, FK.err_loss);
 	}
 
 

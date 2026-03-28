@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <vector>
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 #include "muParser.h"
 
 #pragma warning(push)
@@ -32,12 +34,136 @@
 
 namespace NR
 {
+	struct Vec3
+	{
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+	};
+
+	static Vec3 operator+(const Vec3& a, const Vec3& b)
+	{
+		return {a.x + b.x, a.y + b.y, a.z + b.z};
+	}
+
+	static Vec3 operator-(const Vec3& a, const Vec3& b)
+	{
+		return {a.x - b.x, a.y - b.y, a.z - b.z};
+	}
+
+	static Vec3 operator*(const Vec3& v, float s)
+	{
+		return {v.x * s, v.y * s, v.z * s};
+	}
+
+	static float Length(const Vec3& v)
+	{
+		return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+	}
+
+	struct Mat3
+	{
+		float m[3][3]{};
+
+		static Mat3 Identity()
+		{
+			Mat3 r;
+			r.m[0][0] = 1.0f;
+			r.m[0][1] = 0.0f;
+			r.m[0][2] = 0.0f;
+			r.m[1][0] = 0.0f;
+			r.m[1][1] = 1.0f;
+			r.m[1][2] = 0.0f;
+			r.m[2][0] = 0.0f;
+			r.m[2][1] = 0.0f;
+			r.m[2][2] = 1.0f;
+			return r;
+		}
+	};
+
+	static Mat3 Multiply(const Mat3& a, const Mat3& b)
+	{
+		Mat3 r{};
+		for (int i = 0; i < 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j)
+			{
+				r.m[i][j] = 0.0f;
+				for (int k = 0; k < 3; ++k)
+					r.m[i][j] += a.m[i][k] * b.m[k][j];
+			}
+		}
+		return r;
+	}
+
+	static Vec3 Multiply(const Mat3& m, const Vec3& v)
+	{
+		return {
+			m.m[0][0] * v.x + m.m[0][1] * v.y + m.m[0][2] * v.z,
+			m.m[1][0] * v.x + m.m[1][1] * v.y + m.m[1][2] * v.z,
+			m.m[2][0] * v.x + m.m[2][1] * v.y + m.m[2][2] * v.z
+		};
+	}
+
+	static Mat3 RotX(float a)
+	{
+		const float c = std::cos(a);
+		const float s = std::sin(a);
+		return Mat3{{
+			{1, 0, 0},
+			{0, c, -s},
+			{0, s, c}
+		}};
+	}
+
+	static Mat3 RotY(float a)
+	{
+		const float c = std::cos(a);
+		const float s = std::sin(a);
+		return Mat3{{
+			{c, 0, s},
+			{0, 1, 0},
+			{-s, 0, c}
+		}};
+	}
+
+	static Mat3 RotZ(float a)
+	{
+		const float c = std::cos(a);
+		const float s = std::sin(a);
+		return Mat3{{
+			{c, -s, 0},
+			{s, c, 0},
+			{0, 0, 1}
+		}};
+	}
+
+	static Mat3 EulerXYZ(float x, float y, float z)
+	{
+		// Ordem: X -> Y -> Z
+		return Multiply(Multiply(RotX(x), RotY(y)), RotZ(z));
+	}
+
+	static float DegToRad(float deg)
+	{
+		return deg * 3.14159265358979323846f / 180.0f;
+	}
+
+	struct FootValidationPair
+	{
+		torch::Tensor err_loss;
+	};
+
 	struct IKLossResult
 	{
 		torch::Tensor TotalLoss;
 		torch::Tensor PosLoss;
 		torch::Tensor RotLoss;
 		torch::Tensor RegLoss;
+		torch::Tensor FKFootLoss;
+
+		IKLossResult(torch::Tensor Total, torch::Tensor Pos, torch::Tensor Rot, torch::Tensor Reg, torch::Tensor FKFoot = torch::tensor(0.0f))
+			: TotalLoss(std::move(Total)), PosLoss(std::move(Pos)), RotLoss(std::move(Rot)), RegLoss(std::move(Reg)), FKFootLoss(std::move(FKFoot)) {}
 	};
 
 	struct NRDataBlock
@@ -139,7 +265,7 @@ namespace NR
 					return Input.slice(dimToSlice, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor(); // Retorna vazio se n�o achar o nome
+			return {};
 		}
 
 		[[nodiscard]] torch::Tensor GetOutputBoneValue(const torch::Tensor& Output, const std::string& name) const
@@ -152,7 +278,7 @@ namespace NR
 					return Output.slice(dim, block.Offset, block.Offset + block.FloatCount);
 				}
 			}
-			return torch::Tensor();
+			return {};
 		}
 
 		[[nodiscard]] int32_t GetRequiredInputSize() const
