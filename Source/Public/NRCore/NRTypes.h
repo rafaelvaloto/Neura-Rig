@@ -157,13 +157,9 @@ namespace NR
 	struct IKLossResult
 	{
 		torch::Tensor TotalLoss;
-		torch::Tensor PosLoss;
-		torch::Tensor RotLoss;
-		torch::Tensor RegLoss;
-		torch::Tensor FKFootLoss;
 
-		IKLossResult(torch::Tensor Total, torch::Tensor Pos, torch::Tensor Rot, torch::Tensor Reg, torch::Tensor FKFoot = torch::tensor(0.0f))
-			: TotalLoss(std::move(Total)), PosLoss(std::move(Pos)), RotLoss(std::move(Rot)), RegLoss(std::move(Reg)), FKFootLoss(std::move(FKFoot)) {}
+		IKLossResult(torch::Tensor Total)
+			: TotalLoss(std::move(Total)) {}
 	};
 
 	struct NRDataBlock

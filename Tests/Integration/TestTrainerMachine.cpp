@@ -31,8 +31,12 @@ class NRMultiHeadModel : public NR::INRModel<float>
 {
 public:
 	torch::nn::Sequential backbone{nullptr};
-	torch::nn::Linear head_foot_ik{nullptr};
-	torch::nn::Linear head_leg_ik{nullptr};
+	torch::nn::Linear head_foot_r{nullptr};
+	torch::nn::Linear head_foot_l{nullptr};
+	torch::nn::Linear head_bal_r{nullptr};
+	torch::nn::Linear head_bal_l{nullptr};
+	torch::nn::Linear head_leg_r{nullptr};
+	torch::nn::Linear head_leg_l{nullptr};
 	torch::nn::Linear head_pelvis_ik{nullptr};
 	torch::nn::Linear head_spine_ik{nullptr};
 
@@ -46,8 +50,12 @@ public:
 			                           torch::nn::ELU()
 			                           ));
 
-		head_foot_ik = register_module("head_foot_ik", torch::nn::Linear(hidden, 36));
-		head_leg_ik = register_module("head_leg_ik", torch::nn::Linear(hidden, 12));
+		head_foot_r = register_module("head_foot_r", torch::nn::Linear(hidden, 6));
+		head_foot_l = register_module("head_foot_l", torch::nn::Linear(hidden, 6));
+		head_bal_r = register_module("head_bal_r", torch::nn::Linear(hidden, 6));
+		head_bal_l = register_module("head_bal_l", torch::nn::Linear(hidden, 6));
+		head_leg_r = register_module("head_leg_r", torch::nn::Linear(hidden, 12));
+		head_leg_l = register_module("head_leg_l", torch::nn::Linear(hidden, 12));
 		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
 		head_spine_ik = register_module("head_spine_ik", torch::nn::Linear(hidden, 6));
 	}
@@ -55,11 +63,15 @@ public:
 	torch::Tensor Forward(torch::Tensor x) override
 	{
 		auto feat = backbone->forward(x);
-		auto h_foots = head_foot_ik->forward(feat);
-		auto h_legs = head_leg_ik->forward(feat);
+		auto h_foot_l = head_foot_l->forward(feat);
+		auto h_foot_r = head_foot_r->forward(feat);
+		auto h_ball_l = head_bal_l->forward(feat);
+		auto h_ball_r = head_bal_r->forward(feat);
+		auto h_leg_l = head_leg_l->forward(feat);
+		auto h_leg_r = head_leg_r->forward(feat);
 		auto h_spine = head_spine_ik->forward(feat);
 		auto h_pelvis = head_pelvis_ik->forward(feat);
-		return torch::cat({h_foots, h_legs, h_pelvis, h_spine}, 1);
+		return torch::cat({h_foot_r, h_foot_l, h_ball_r, h_ball_l, h_leg_r, h_leg_l, h_pelvis, h_spine}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override
@@ -115,7 +127,7 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 256, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 1e-3);
+	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 5e-4);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	// 1. Tentar carregar o modelo existente antes de começar
@@ -189,10 +201,10 @@ int main()
 						auto dNumElements = trainee->IdealTargets.numel();
 						std::vector<float> debugData(dDataPtr, dDataPtr + dNumElements);
 
-						// ClientDebug.Send(debugData, "127.0.0.1", 8007);
+						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 0.5)
+					if (!solver && loss < 0.05)
 					{
 						solver = std::make_shared<NRSolver>(model, activeProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;

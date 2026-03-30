@@ -62,10 +62,10 @@ namespace NR
 
 		Optimizer->zero_grad();
 		auto Prediction = TargetModel->Forward(InputTensor);
-		auto [TotalLoss, PosLoss, RotationLoss, RegLoss, FKLoss] = ComputeRLReward(InputTensor, Prediction);
+		auto [TotalLoss] = ComputeRLReward(InputTensor, Prediction);
 
 		TotalLoss.backward();
-		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(), 1.0);
+		torch::nn::utils::clip_grad_norm_(TargetModel->parameters(true), 1.0);
 
 		Optimizer->step();
 		return TotalLoss.template item<float>();
@@ -159,22 +159,22 @@ namespace NR
 		auto P2_xyz = Pred.index({0, torch::indexing::Slice(6, 9)});
 		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(0, 3)});
 		auto T2_xyz = T_ideal.index({0, torch::indexing::Slice(6, 9)});
-
-
-		auto FK = ValidateFeetFK(Pred, LOffsets, ROffsets, false);
 		const auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		const auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
 
-		// Loss total
-		const auto P1Loss = Pos1Loss + Pos2Loss *1.0;
-		const auto TotalLoss = P1Loss + (FK.err_loss * 5.5);
+		// auto  = ValidateFeetFK(, LOffsets, ROffsets, true);
+		auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, false);
+		//auto T_FK = ValidateFeetFK(T_ideal, LOffsets, ROffsets, true);
+
+		const auto P1Loss = Pos1Loss + Pos2Loss * 0.1f;
+		const auto TotalLoss = P1Loss + (P_FK.err_loss * 0.01f);
 
 		if (frameCounter++ % 30 == 0)
 		{
 			std::cout << "Frame: " << frameCounter << std::endl;
 			std::cout << "Total: " << TotalLoss.item<float>() << std::endl;
 		}
-		return IKLossResult(TotalLoss, TotalLoss, TotalLoss, TotalLoss, FK.err_loss);
+		return IKLossResult(TotalLoss);
 	}
 
 
