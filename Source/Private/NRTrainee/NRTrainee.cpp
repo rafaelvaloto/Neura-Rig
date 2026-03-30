@@ -163,11 +163,11 @@ namespace NR
 		const auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
 
 		// auto  = ValidateFeetFK(, LOffsets, ROffsets, true);
-		auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, false);
-		//auto T_FK = ValidateFeetFK(T_ideal, LOffsets, ROffsets, true);
+		// auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, true);
+		// auto T_FK = ValidateFeetFK(T_ideal, LOffsets, ROffsets, true);
 
-		const auto P1Loss = Pos1Loss + Pos2Loss * 0.1f;
-		const auto TotalLoss = P1Loss + (P_FK.err_loss * 0.01f);
+		const auto P1Loss = Pos1Loss + Pos2Loss * 1.0f;
+		const auto TotalLoss = P1Loss;
 
 		if (frameCounter++ % 30 == 0)
 		{

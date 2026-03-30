@@ -112,6 +112,7 @@ namespace NR
 								rule.Variables.push_back(vars);
 							}
 
+							// Logic
 							for (auto& el : it->at("Logic").items())
 							{
 								NRLogic logic;
@@ -119,6 +120,18 @@ namespace NR
 								logic.Expr = el.value();
 								rule.Logic.push_back(logic);
 								std::cout << "Logic: " << logic.Name  << " : " << logic.Expr << std::endl;
+							}
+
+							// Rotation Limits
+							if (it->contains("Limits"))
+							{
+								auto& lim = it->at("Limits");
+								rule.Limits.MinX = lim.value("MinX", -360.0f);
+								rule.Limits.MaxX = lim.value("MaxX", 360.0f);
+								rule.Limits.MinY = lim.value("MinY", -360.0f);
+								rule.Limits.MaxY = lim.value("MaxY", 360.0f);
+								rule.Limits.MinZ = lim.value("MinZ", -360.0f);
+								rule.Limits.MaxZ = lim.value("MaxZ", 360.0f);
 							}
 
 							for (int p = 0; p < it->at("Phases").size(); p++)

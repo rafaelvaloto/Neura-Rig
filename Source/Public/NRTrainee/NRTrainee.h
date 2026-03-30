@@ -85,10 +85,10 @@ namespace NR
 			FootValidationPair result;
 			result.err_loss = torch::tensor(0.0f, pred.options());
 
-			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footTarget, bool isRightLeg) {
+			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footTarget, bool isRightLeg, int thighBindingIdx, int calfBindingIdx) {
 				if (rotationOffsets.size() < 2) return;
 
-				auto readRotTensor = [&](int64_t offset, bool applyThighOffset = false) -> torch::Tensor {
+				auto readRotWithLimit = [&](int64_t offset, int bindingIdx, bool applyThighOffset = false) -> torch::Tensor {
 					if (offset + 3 > pred.size(1)) return torch::zeros({3}, pred.options());
 					auto rTensor = pred.index({0, torch::indexing::Slice(offset, offset + 3)}).clone();
 
@@ -103,11 +103,35 @@ namespace NR
 						rTensor[0] = rTensor[0] - 3.14159265358979323846f; // -180° em radianos
 					}
 
+					// Apply Rotation Limits if available
+					if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size())
+					{
+						const auto& binding = RigDesc.Bindings[bindingIdx];
+						// We look for a rule that might have limits. 
+						// Usually there is one main rule per binding in this context.
+						if (!binding.Rules.empty())
+						{
+							const auto& limits = binding.Rules[0].Limits;
+							auto toRad = [](float deg) { return deg * (3.14159265358979323846f / 180.0f); };
+							
+							auto minBound = torch::tensor({toRad(limits.MinX), toRad(limits.MinY), toRad(limits.MinZ)}, rTensor.options());
+							auto maxBound = torch::tensor({toRad(limits.MaxX), toRad(limits.MaxY), toRad(limits.MaxZ)}, rTensor.options());
+
+							// Penalize if outside bounds (Soft constraint)
+							auto diffMin = torch::clamp(minBound - rTensor, 0.0f);
+							auto diffMax = torch::clamp(rTensor - maxBound, 0.0f);
+							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 10.0f;
+
+							// Hard clamp for FK calculation
+							rTensor = torch::clamp(rTensor, minBound, maxBound);
+						}
+					}
+
 					return rTensor;
 				};
 
-				auto p0_tensor = readRotTensor(rotationOffsets[1], true); // Thigh
-				auto p1_tensor = readRotTensor(rotationOffsets[0], false); // Calf
+				auto p0_tensor = readRotWithLimit(rotationOffsets[1], thighBindingIdx, true); // Thigh
+				auto p1_tensor = readRotWithLimit(rotationOffsets[0], calfBindingIdx, false); // Calf
 
 				// Bone lengths
 				float L1 = 0.457519f;
@@ -182,14 +206,21 @@ namespace NR
 				auto kneeAngle_abs = torch::abs(kneeAngle_tensor);
 				
 				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * errorWeight;
-				result.err_loss = result.err_loss + knee_consistency_loss * 0.01f;
+				result.err_loss = result.err_loss + knee_consistency_loss * 0.1f;
 			};
 
 			auto P1_xyz = pred.index({0, torch::indexing::Slice(0, 3)});
 			auto P2_xyz = pred.index({0, torch::indexing::Slice(6, 9)});
 
-			computeFoot(rightOffsets, P1_xyz, true);
-			computeFoot(leftOffsets, P2_xyz, false);
+			auto findBindingIdx = [&](const std::string& name) -> int {
+				for (int i = 0; i < (int)RigDesc.Bindings.size(); ++i) {
+					if (RigDesc.Bindings[i].BoneName == name) return i;
+				}
+				return -1;
+			};
+
+			computeFoot(rightOffsets, P1_xyz, true, findBindingIdx("thigh_r"), findBindingIdx("calf_r"));
+			computeFoot(leftOffsets, P2_xyz, false, findBindingIdx("thigh_l"), findBindingIdx("calf_l"));
 			return result;
 		}
 

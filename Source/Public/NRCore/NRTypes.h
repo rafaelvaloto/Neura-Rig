@@ -194,6 +194,17 @@ namespace NR
 		std::vector<NRVars> Variables;
 		std::vector<NRLogic> Logic;
 
+		struct RotationLimit
+		{
+			float MinX = -360.0f;
+			float MaxX = 360.0f;
+			float MinY = -360.0f;
+			float MaxY = 360.0f;
+			float MinZ = -360.0f;
+			float MaxZ = 360.0f;
+		};
+		RotationLimit Limits;
+
 		struct Phase
 		{
 			std::string Id;

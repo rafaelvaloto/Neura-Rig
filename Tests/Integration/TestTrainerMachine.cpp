@@ -124,10 +124,10 @@ int main()
 
 	auto InputSize = activeProfile.GetRequiredInputSize();
 	auto out_size = activeProfile.GetRequiredOutputSize();
-	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 256, out_size);
+	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 5e-4);
+	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 4e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	// 1. Tentar carregar o modelo existente antes de começar
