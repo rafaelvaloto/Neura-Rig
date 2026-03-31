@@ -85,11 +85,13 @@ namespace NR
 			FootValidationPair result;
 			result.err_loss = torch::tensor(0.0f, pred.options());
 
-			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footTarget, bool isRightLeg, int thighBindingIdx, int calfBindingIdx) {
-				if (rotationOffsets.size() < 2) return;
+			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footIKOffset, bool isRightLeg, int thighBindingIdx, int calfBindingIdx) {
+				if (rotationOffsets.size() < 2)
+					return;
 
 				auto readRotWithLimit = [&](int64_t offset, int bindingIdx, bool applyThighOffset = false) -> torch::Tensor {
-					if (offset + 3 > pred.size(1)) return torch::zeros({3}, pred.options());
+					if (offset + 3 > pred.size(1))
+						return torch::zeros({3}, pred.options());
 					auto rTensor = pred.index({0, torch::indexing::Slice(offset, offset + 3)}).clone();
 
 					if (anglesAreDegrees)
@@ -100,29 +102,28 @@ namespace NR
 					// Aplica offset de -180° no pitch do thigh direito
 					if (applyThighOffset && isRightLeg)
 					{
-						rTensor[0] = rTensor[0] - 3.14159265358979323846f; // -180° em radianos
+						rTensor[0] = rTensor[0] - 3.14159265358979323846f;
+					} else if (applyThighOffset && !isRightLeg)
+					{
+						rTensor[1] = -rTensor[1];
 					}
 
 					// Apply Rotation Limits if available
 					if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size())
 					{
 						const auto& binding = RigDesc.Bindings[bindingIdx];
-						// We look for a rule that might have limits. 
-						// Usually there is one main rule per binding in this context.
 						if (!binding.Rules.empty())
 						{
 							const auto& limits = binding.Rules[0].Limits;
 							auto toRad = [](float deg) { return deg * (3.14159265358979323846f / 180.0f); };
-							
+
 							auto minBound = torch::tensor({toRad(limits.MinX), toRad(limits.MinY), toRad(limits.MinZ)}, rTensor.options());
 							auto maxBound = torch::tensor({toRad(limits.MaxX), toRad(limits.MaxY), toRad(limits.MaxZ)}, rTensor.options());
 
-							// Penalize if outside bounds (Soft constraint)
 							auto diffMin = torch::clamp(minBound - rTensor, 0.0f);
 							auto diffMax = torch::clamp(rTensor - maxBound, 0.0f);
 							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 10.0f;
 
-							// Hard clamp for FK calculation
 							rTensor = torch::clamp(rTensor, minBound, maxBound);
 						}
 					}
@@ -136,7 +137,12 @@ namespace NR
 				// Bone lengths
 				float L1 = 0.457519f;
 				float L2 = 0.417055f;
-				auto hipPos = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
+
+				auto pelvisOffset = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
+				auto pelvisRotation = pred.index({0, torch::indexing::Slice(48 + 3, 48 + 6)});
+
+				auto pelvisBasePos = torch::tensor({0.0f, 0.0f, 95.0f}, pred.options());
+				auto hipPos = pelvisBasePos + pelvisOffset;
 
 				auto getRotX = [&](torch::Tensor a) {
 					auto c = torch::cos(a);
@@ -172,23 +178,31 @@ namespace NR
 					return torch::mm(torch::mm(getRotX(rot[0]), getRotY(rot[1])), getRotZ(rot[2]));
 				};
 
+				auto pelvisBaseRot = torch::tensor({0.0f, -1.570796f, 0.0f}, pred.options());
+				auto mPelvis = torch::mm(getEulerXYZ(pelvisBaseRot), getEulerXYZ(pelvisRotation));
+
 				// Forward Kinematics (differentiable)
-				auto mThigh = getEulerXYZ(p0_tensor);
-				auto bone1 = torch::tensor({-L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1); // Osso aponta na direção -X (altura, para baixo)
+				auto mThigh = torch::mm(mPelvis, getEulerXYZ(p0_tensor)); // Multiplica pelvis * thigh
+				auto bone1 = torch::tensor({-L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, bone1).squeeze(1);
 
 				auto mCalf = getEulerXYZ(p1_tensor);
 				auto mGlobalCalf = torch::mm(mThigh, mCalf);
-				auto bone2 = torch::tensor({-L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1); // Osso aponta na direção -X (altura, para baixo)
+				auto bone2 = torch::tensor({-L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mGlobalCalf, bone2).squeeze(1);
 
-				// Position Error
+				// Target = AI predicate foot target
+				auto footTarget = hipPos + footIKOffset;
+
+				std::cout << "Foot Pos (FK): " << footPos[0] << ", " << footPos[1] << ", " << footPos[2] << std::endl;
+				std::cout << "Foot Target: " << footTarget[0] << ", " << footTarget[1] << ", " << footTarget[2] << std::endl;
+				std::cout << "Error: " << torch::norm(footPos - footTarget).item<float>() << " meters" << std::endl;
+
+				// Position Error: "That are rotation be is correct?"
 				auto posErrTensor = torch::norm(footPos - footTarget);
-				
-				// Auto-correção: O Foot Pos calculado pelo FK deve bater com o Foot Pos predito pela IA
 				result.err_loss = result.err_loss + posErrTensor;
 
-				// Knee Angle consistency (original logic)
+				// Knee Angle consistency
 				float d0 = std::abs(L1 - L2);
 				float d1 = L1 + L2;
 				auto D_tensor = torch::abs(footPos[0] - hipPos[0]);
@@ -200,27 +214,29 @@ namespace NR
 				float footThreshold = 0.05f;
 				auto errorWeight = torch::where(posErrTensor > footThreshold, torch::tensor(1.0f, pred.options()), posErrTensor / footThreshold);
 
-				// Consistência adicional entre o ângulo do joelho e as rotações preditas
 				auto p0_x_abs = torch::abs(p0_tensor[0]);
 				auto p1_x_abs = torch::abs(p1_tensor[0]);
 				auto kneeAngle_abs = torch::abs(kneeAngle_tensor);
-				
+
 				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * errorWeight;
 				result.err_loss = result.err_loss + knee_consistency_loss * 0.1f;
 			};
 
-			auto P1_xyz = pred.index({0, torch::indexing::Slice(0, 3)});
-			auto P2_xyz = pred.index({0, torch::indexing::Slice(6, 9)});
+			auto P1_offset = pred.index({0, torch::indexing::Slice(0, 3)});
+			auto P2_offset = pred.index({0, torch::indexing::Slice(6, 9)});
 
 			auto findBindingIdx = [&](const std::string& name) -> int {
-				for (int i = 0; i < (int)RigDesc.Bindings.size(); ++i) {
-					if (RigDesc.Bindings[i].BoneName == name) return i;
+				for (int i = 0; i < (int)RigDesc.Bindings.size(); ++i)
+				{
+					if (RigDesc.Bindings[i].BoneName == name)
+						return i;
 				}
 				return -1;
 			};
 
-			computeFoot(rightOffsets, P1_xyz, true, findBindingIdx("thigh_r"), findBindingIdx("calf_r"));
-			computeFoot(leftOffsets, P2_xyz, false, findBindingIdx("thigh_l"), findBindingIdx("calf_l"));
+			computeFoot(rightOffsets, P1_offset, true, findBindingIdx("thigh_r"), findBindingIdx("calf_r"));
+			computeFoot(leftOffsets, P2_offset, false, findBindingIdx("thigh_l"), findBindingIdx("calf_l"));
+
 			return result;
 		}
 

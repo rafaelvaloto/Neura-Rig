@@ -204,7 +204,7 @@ int main()
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 0.05)
+					if (!solver && loss < 1.0)
 					{
 						solver = std::make_shared<NRSolver>(model, activeProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
