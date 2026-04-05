@@ -52,6 +52,14 @@ namespace NR
 		torch::Tensor PredHistory2;
 		torch::Tensor SmoothedOutput;
 
+		std::vector<torch::Tensor> PredictionCandidates;
+		static constexpr size_t MaxCandidates = 10;
+
+		torch::Tensor ChooseBestPrediction(
+			const std::vector<torch::Tensor>& candidates,
+			const torch::Tensor& target,
+			const torch::Tensor& prevPred);
+
 		/**
 		 * Retrieves the next trainee in the training sequence based on the current state.
 		 *
@@ -118,7 +126,7 @@ namespace NR
 
 							auto diffMin = torch::clamp(minBound - rTensor, 0.0f);
 							auto diffMax = torch::clamp(rTensor - maxBound, 0.0f);
-							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 10.0f;
+							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 1.0f;
 
 							rTensor = torch::clamp(rTensor, minBound, maxBound);
 						}
@@ -170,15 +178,10 @@ namespace NR
 				// Bone lengths
 				auto pelvisOffset = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
 				auto pelvisRotation = pred.index({0, torch::indexing::Slice(48 + 3, 48 + 6)});
-
-				auto pelvisBasePos = torch::tensor({0.0f, 0.0f, (L1 + L2 + 0.08f)}, pred.options());
-				auto hipPos = pelvisOffset + pelvisBasePos;
-
-				auto pelvisBaseRot = torch::tensor({0.0f, -1.570796f, 0.0f}, pred.options());
-				auto mPelvis = torch::mm(getEulerXYZ(pelvisBaseRot), getEulerXYZ(pelvisRotation));
+				auto hipPos = pelvisOffset;
 
 				// Forward Kinematics (differentiable)
-				auto mThigh = torch::mm(mPelvis, getEulerXYZ(p0_tensor)); // Multiplica pelvis * thigh
+				auto mThigh = torch::mm(getEulerXYZ(pelvisRotation), getEulerXYZ(p0_tensor)); // Multiplica pelvis * thigh
 				auto bone1 = torch::tensor({L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, bone1).squeeze(1);
 
@@ -186,7 +189,7 @@ namespace NR
 				auto mGlobalCalf = torch::mm(mThigh, mCalf);
 				auto bone2 = torch::tensor({L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mGlobalCalf, bone2).squeeze(1);
-				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - pelvisBasePos));
+				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - hipPos));
 
 				// Knee Angle consistency
 				float d0 = std::abs(L1 - L2);

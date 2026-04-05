@@ -34,10 +34,10 @@
     ],
     "Parameters": {
       "Constants": {
-        "gait_scale": 3.8,
+        "gait_scale": 3.95,
         "step_height": 0.45,
-        "max_pitch_norm": 0.45,
-        "pelvisOffset": 0.08
+        "max_pitch_norm": 0.65,
+        "pelvisOffset": 0.06
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -117,7 +117,7 @@
       },
       {
         "Name": "Humanoid_Calf_Ik_Curve",
-        "Limits": { "MinX": -65.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
+        "Limits": { "MinX": -65.0, "MaxX": 20.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
@@ -150,7 +150,7 @@
       },
       {
         "Name": "Humanoid_Thigh_Ik_Curve",
-        "Limits": { "MinX": -65.0, "MaxX": 165.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
+        "Limits": { "MinX": -180.0, "MaxX": 165.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
@@ -183,13 +183,13 @@
       },
       {
         "Name": "Humanoid_Pelvis_Ik_Curve",
+        "Limits": { "MinX": -360.0, "MaxX": 360.0, "MinY": -360.0, "MaxY": 360.0, "MinZ": 0.0, "MaxZ": 0.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
           "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
-          "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "min(bone_l2 * 1.0, step_height)"
+          "linear_cycle": "2.0 * phase_offset - 1.0"
         },
         "Phases": [
           {
@@ -197,9 +197,9 @@
             "condition": "1.0",
             "offset_x": "0.0",
             "offset_y": "0.0",
-            "offset_z": "(bone_l1 + bone_l2 + pelvisOffset)",
+            "offset_z": "0.90",
             "rot_pitch": "0.0",
-            "rot_yaw": "-1.570796",
+            "rot_yaw": "1.570796",
             "rot_roll": "0.0"
           }
         ]

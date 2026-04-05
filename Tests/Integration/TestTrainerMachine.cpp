@@ -81,7 +81,8 @@ public:
 
 	void LoadModel(const std::string& FilePath) override
 	{
-		torch::load(backbone, FilePath);
+		auto self = shared_from_this();
+		torch::load(self, FilePath);
 	}
 };
 
@@ -130,8 +131,11 @@ int main()
 	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 4e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
-	// 1. Tentar carregar o modelo existente antes de começar
-	const std::string ModelSavePath = "trained_model.pt";
+	std::string ModelSavePath = "trained_model.pt";
+	if (!std::filesystem::exists(ModelSavePath))
+	{
+		ModelSavePath = "../trained_model.pt"; // Fallback for some build configurations
+	}
 	if (std::filesystem::exists(ModelSavePath))
 	{
 		try
@@ -204,7 +208,7 @@ int main()
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 1.0)
+					if (!solver && loss < 1.0f)
 					{
 						solver = std::make_shared<NRSolver>(model, activeProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;

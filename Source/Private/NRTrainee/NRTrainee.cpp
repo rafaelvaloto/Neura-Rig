@@ -52,6 +52,41 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
+	torch::Tensor NRTrainee<T>::ChooseBestPrediction(
+		const std::vector<torch::Tensor>& candidates,
+		const torch::Tensor& target,
+		const torch::Tensor& prevPred)
+	{
+		if (candidates.empty())
+		{
+			return torch::zeros_like(target);
+		}
+
+		float bestScore = std::numeric_limits<float>::max();
+		torch::Tensor best = candidates.front();
+
+		for (const auto& pred : candidates)
+		{
+			auto posLoss = torch::mse_loss(pred, target).template item<float>();
+			float tempLoss = 0.0f;
+			if (prevPred.defined() && prevPred.numel() > 0)
+			{
+				tempLoss = torch::mse_loss(pred, prevPred).template item<float>();
+			}
+
+			float score = posLoss + 0.35f * tempLoss;
+
+			if (score < bestScore)
+			{
+				bestScore = score;
+				best = pred;
+			}
+		}
+
+		return best;
+	}
+
+	template<FloatingPoint T>
 	float NRTrainee<T>::TrainStep(const std::vector<float>& InputFloats)
 	{
 		int32_t InCount = RigDesc.GetRequiredInputSize();
@@ -77,7 +112,7 @@ namespace NR
 	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
 		constexpr float wPos = 1.0f;
-		constexpr float wPelvis = 1.0f;
+		constexpr float wPelvis = 0.1f;
 		constexpr float wFK = 0.1f;
 		constexpr float wTemporal = 0.35f;
 		constexpr float wAccel = 0.20f;
@@ -177,7 +212,7 @@ namespace NR
 		auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, true);
 		auto FKLoss = P_FK.err_loss * wFK;
 
-		auto BaseLoss = (Pos1Loss + Pos2Loss * 2.0f) * wPos + PelvisLoss * wPelvis + FKLoss;
+		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + (PelvisLoss * wPelvis) + FKLoss;
 
 		// =========================
 		// Temporal smoothing loss
@@ -228,8 +263,15 @@ namespace NR
 		PredHistory2 = PredHistory.defined() ? PredHistory.detach().clone() : torch::Tensor();
 		PredHistory = Pred.detach().clone();
 
+		// Update PredictionCandidates buffer
+		PredictionCandidates.push_back(Pred.detach().clone());
+		if (PredictionCandidates.size() > MaxCandidates)
+		{
+			PredictionCandidates.erase(PredictionCandidates.begin());
+		}
+
 		// Suavização EMA para uso em runtime/animação
-		constexpr float emaAlpha = 0.30f;
+		constexpr float emaAlpha = 0.15f;
 		if (!SmoothedOutput.defined() || SmoothedOutput.numel() == 0)
 		{
 			SmoothedOutput = Pred.detach().clone();
@@ -286,6 +328,7 @@ namespace NR
 			);
 
 		Evaluator.deltaTime = 0.0;
+		PredictionCandidates.clear();
 		for (auto& deq : PredXHistory)
 			deq.clear();
 		for (auto& deq : IdealXHistory)
