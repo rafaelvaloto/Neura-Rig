@@ -91,21 +91,14 @@ namespace NR
 
 				auto readRotWithLimit = [&](int64_t offset, int bindingIdx, bool applyThighOffset = false) -> torch::Tensor {
 					if (offset + 3 > pred.size(1))
+					{
 						return torch::zeros({3}, pred.options());
-					auto rTensor = pred.index({0, torch::indexing::Slice(offset, offset + 3)}).clone();
+					}
 
+					auto rTensor = pred.index({0, torch::indexing::Slice(offset, offset + 3)}).clone();
 					if (anglesAreDegrees)
 					{
 						rTensor = rTensor * (3.14159265358979323846f / 180.0f);
-					}
-
-					// Aplica offset de -180° no pitch do thigh direito
-					if (applyThighOffset && isRightLeg)
-					{
-						rTensor[0] = rTensor[0] - 3.14159265358979323846f;
-					} else if (applyThighOffset && !isRightLeg)
-					{
-						rTensor[1] = -rTensor[1];
 					}
 
 					// Apply Rotation Limits if available
@@ -130,19 +123,6 @@ namespace NR
 
 					return rTensor;
 				};
-
-				auto p0_tensor = readRotWithLimit(rotationOffsets[1], thighBindingIdx, true); // Thigh
-				auto p1_tensor = readRotWithLimit(rotationOffsets[0], calfBindingIdx, false); // Calf
-
-				// Bone lengths
-				float L1 = 0.457519f;
-				float L2 = 0.417055f;
-
-				auto pelvisOffset = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
-				auto pelvisRotation = pred.index({0, torch::indexing::Slice(48 + 3, 48 + 6)});
-
-				auto pelvisBasePos = torch::tensor({0.0f, 0.0f, 95.0f}, pred.options());
-				auto hipPos = pelvisBasePos + pelvisOffset;
 
 				auto getRotX = [&](torch::Tensor a) {
 					auto c = torch::cos(a);
@@ -178,48 +158,52 @@ namespace NR
 					return torch::mm(torch::mm(getRotX(rot[0]), getRotY(rot[1])), getRotZ(rot[2]));
 				};
 
+				auto p0_tensor = readRotWithLimit(rotationOffsets[1], thighBindingIdx, true); // Thigh
+				auto p1_tensor = readRotWithLimit(rotationOffsets[0], calfBindingIdx, false); // Calf
+
+				float L1 = 0.457519f;
+				float L2 = 0.417055f;
+
+				// Bone lengths
+				auto pelvisOffset = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
+				auto pelvisRotation = pred.index({0, torch::indexing::Slice(48 + 3, 48 + 6)});
+
+				auto pelvisBasePos = torch::tensor({0.0f, 0.0f, (L1 + L2 + 0.08f)}, pred.options());
+				auto hipPos = pelvisOffset + pelvisBasePos;
+
 				auto pelvisBaseRot = torch::tensor({0.0f, -1.570796f, 0.0f}, pred.options());
 				auto mPelvis = torch::mm(getEulerXYZ(pelvisBaseRot), getEulerXYZ(pelvisRotation));
 
 				// Forward Kinematics (differentiable)
 				auto mThigh = torch::mm(mPelvis, getEulerXYZ(p0_tensor)); // Multiplica pelvis * thigh
-				auto bone1 = torch::tensor({-L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
+				auto bone1 = torch::tensor({L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, bone1).squeeze(1);
 
 				auto mCalf = getEulerXYZ(p1_tensor);
 				auto mGlobalCalf = torch::mm(mThigh, mCalf);
 				auto bone2 = torch::tensor({-L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mGlobalCalf, bone2).squeeze(1);
-
-				// Target = AI predicate foot target
-				auto footTarget = hipPos + footIKOffset;
-
-				std::cout << "Foot Pos (FK): " << footPos[0] << ", " << footPos[1] << ", " << footPos[2] << std::endl;
-				std::cout << "Foot Target: " << footTarget[0] << ", " << footTarget[1] << ", " << footTarget[2] << std::endl;
-				std::cout << "Error: " << torch::norm(footPos - footTarget).item<float>() << " meters" << std::endl;
-
-				// Position Error: "That are rotation be is correct?"
-				auto posErrTensor = torch::norm(footPos - footTarget);
-				result.err_loss = result.err_loss + posErrTensor;
+				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - pelvisBasePos));
 
 				// Knee Angle consistency
 				float d0 = std::abs(L1 - L2);
 				float d1 = L1 + L2;
-				auto D_tensor = torch::abs(footPos[0] - hipPos[0]);
+				auto D_tensor = torch::norm(footPos);
 				auto D_clamped = torch::clamp(D_tensor, d0, d1);
 
 				auto cosAngle_tensor = (L1 * L1 + L2 * L2 - torch::pow(D_clamped, 2)) / (2 * L1 * L2);
 				auto kneeAngle_tensor = torch::acos(torch::clamp(cosAngle_tensor, -1.0f, 1.0f));
 
-				float footThreshold = 0.05f;
-				auto errorWeight = torch::where(posErrTensor > footThreshold, torch::tensor(1.0f, pred.options()), posErrTensor / footThreshold);
-
 				auto p0_x_abs = torch::abs(p0_tensor[0]);
 				auto p1_x_abs = torch::abs(p1_tensor[0]);
 				auto kneeAngle_abs = torch::abs(kneeAngle_tensor);
 
-				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * errorWeight;
-				result.err_loss = result.err_loss + knee_consistency_loss * 0.1f;
+
+				std::cout << "Foot Pos: " << footPos[0].item<float>() << "," << footPos[1].item<float>() << "," << footPos[2].item<float>() << std::endl;
+				std::cout << "footIKOffset: " << footIKOffset[0].item<float>() << "," << footIKOffset[1].item<float>() << "," << footIKOffset[2].item<float>() << std::endl;
+				std::cout << "Knee Angle: " << kneeAngle_tensor.item<float>() << std::endl;
+				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * 0.1f;
+				result.err_loss = result.err_loss + (posErrTensor * 1.0) + knee_consistency_loss;
 			};
 
 			auto P1_offset = pred.index({0, torch::indexing::Slice(0, 3)});

@@ -156,13 +156,7 @@ namespace NR
 		IdealTargets = T_ideal;
 
 		auto P_Pelvis = Pred.index({0, torch::indexing::Slice(48, 48 + 6)});
-		std::cout << "Pred Pelvis POS: " << P_Pelvis[0].item<float>() << "," << P_Pelvis[1].item<float>() << "," << P_Pelvis[2].item<float>() << std::endl;
-		std::cout << "Pred Pelvis ROT: " << P_Pelvis[3].item<float>() << "," << P_Pelvis[4].item<float>() << "," << P_Pelvis[5].item<float>() << std::endl;
-
 		auto T_Pelvis = T_ideal.index({0, torch::indexing::Slice(48, 48 + 6)});
-		std::cout << "Ideal Pelvis POS: " << T_Pelvis[0].item<float>() << "," << T_Pelvis[1].item<float>() << "," << T_Pelvis[2].item<float>() << std::endl;
-		std::cout << "Ideal Pelvis ROT: " << T_Pelvis[3].item<float>() << "," << T_Pelvis[4].item<float>() << "," << T_Pelvis[5].item<float>() << std::endl;
-
 		auto errPelvis = torch::mse_loss(P_Pelvis, T_Pelvis);
 
 		auto P1_xyz = Pred.index({0, torch::indexing::Slice(0, 3)});
@@ -172,11 +166,11 @@ namespace NR
 
 		const auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		const auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
-		// const auto PelvisLoss = torch::mse_loss(P_Pelvis, T_Pelvis);
 
 		auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, true);
-		const auto FKLoss = P_FK.err_loss * 0.01f;
-		const auto P1Loss = Pos1Loss + Pos2Loss * 1.0f;
+		const auto FKLoss = P_FK.err_loss * 0.1f;
+
+		const auto P1Loss = Pos1Loss + Pos2Loss * 2.0f;
 		const auto P0Loss = errPelvis * 1.0f;
 		const auto TotalLoss = P1Loss + P0Loss + FKLoss;
 
