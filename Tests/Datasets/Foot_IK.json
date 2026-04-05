@@ -117,7 +117,7 @@
       },
       {
         "Name": "Humanoid_Calf_Ik_Curve",
-        "Limits": { "MinX": -35.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
+        "Limits": { "MinX": -65.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
@@ -150,7 +150,7 @@
       },
       {
         "Name": "Humanoid_Thigh_Ik_Curve",
-        "Limits": { "MinX": -360.0, "MaxX": 360.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
+        "Limits": { "MinX": -65.0, "MaxX": 165.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",

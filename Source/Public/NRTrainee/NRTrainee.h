@@ -48,6 +48,9 @@ namespace NR
 		 */
 		torch::Tensor IdealTargets;
 		torch::Tensor Predicated;
+		torch::Tensor PredHistory;
+		torch::Tensor PredHistory2;
+		torch::Tensor SmoothedOutput;
 
 		/**
 		 * Retrieves the next trainee in the training sequence based on the current state.
@@ -181,7 +184,7 @@ namespace NR
 
 				auto mCalf = getEulerXYZ(p1_tensor);
 				auto mGlobalCalf = torch::mm(mThigh, mCalf);
-				auto bone2 = torch::tensor({-L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
+				auto bone2 = torch::tensor({L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mGlobalCalf, bone2).squeeze(1);
 				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - pelvisBasePos));
 
@@ -197,12 +200,7 @@ namespace NR
 				auto p0_x_abs = torch::abs(p0_tensor[0]);
 				auto p1_x_abs = torch::abs(p1_tensor[0]);
 				auto kneeAngle_abs = torch::abs(kneeAngle_tensor);
-
-
-				std::cout << "Foot Pos: " << footPos[0].item<float>() << "," << footPos[1].item<float>() << "," << footPos[2].item<float>() << std::endl;
-				std::cout << "footIKOffset: " << footIKOffset[0].item<float>() << "," << footIKOffset[1].item<float>() << "," << footIKOffset[2].item<float>() << std::endl;
-				std::cout << "Knee Angle: " << kneeAngle_tensor.item<float>() << std::endl;
-				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * 0.1f;
+				auto knee_consistency_loss = (torch::abs(kneeAngle_abs - p0_x_abs) + torch::abs(kneeAngle_abs - p1_x_abs)) * 1.0f;
 				result.err_loss = result.err_loss + (posErrTensor * 1.0) + knee_consistency_loss;
 			};
 
