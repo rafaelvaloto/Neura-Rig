@@ -166,32 +166,34 @@ namespace NR
 					int B_idx = 0;
 					for (const auto& [formulaName, expr] : Formulas)
 					{
-						auto key = Id + "_" + formulaName;
-						if (auto F_it = varMap.find(key); F_it != varMap.end())
+						if (expr != "0.0")
 						{
-							*(F_it->second) = Evaluator.Eval(i, expr);
-							T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
+							auto key = Id + "_" + formulaName;
+							if (auto F_it = varMap.find(key); F_it != varMap.end())
+							{
+								*(F_it->second) = Evaluator.Eval(i, expr);
+								T_ideal[0][Bindings.Offset + B_idx] = *(F_it->second);
+							}
 						}
 						++B_idx;
 					}
-
 					break;
 				}
 			}
 		}
 
-		std::vector<int64_t> ROffsets;
-		std::vector<int64_t> LOffsets;
-		ROffsets.reserve(2);
-		LOffsets.reserve(2);
+		std::vector<int64_t> Offsets_l0;
+		std::vector<int64_t> Offsets_l1;
+		Offsets_l0.reserve(2);
+		Offsets_l1.reserve(2);
 
 		for (size_t i = 0; i < B_size; ++i)
 		{
 			auto& Bindings = RigDesc.Bindings[i];
-			if (Bindings.BoneName == "calf_r" || Bindings.BoneName == "thigh_r")
-				ROffsets.push_back(Bindings.Offset + 3);
-			else if (Bindings.BoneName == "calf_l" || Bindings.BoneName == "thigh_l")
-				LOffsets.push_back(Bindings.Offset + 3);
+			if (Bindings.BoneName == "bone_l1_0" || Bindings.BoneName == "bone_l2_0")
+				Offsets_l0.push_back(Bindings.Offset + 3);
+			else if (Bindings.BoneName == "bone_l1_1" || Bindings.BoneName == "bone_l2_1")
+				Offsets_l1.push_back(Bindings.Offset + 3);
 		}
 
 		// =========================
@@ -202,17 +204,23 @@ namespace NR
 		auto PelvisLoss = torch::mse_loss(P_Pelvis, T_Pelvis);
 
 		auto P1_xyz = Pred.index({0, torch::indexing::Slice(0, 3)});
-		auto P2_xyz = Pred.index({0, torch::indexing::Slice(6, 9)});
 		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(0, 3)});
+
+		auto P2_xyz = Pred.index({0, torch::indexing::Slice(6, 9)});
 		auto T2_xyz = T_ideal.index({0, torch::indexing::Slice(6, 9)});
+
+		// auto P3_xyz = Pred.index({0, torch::indexing::Slice(12, 24)});
+		// auto T3_xyz = T_ideal.index({0, torch::indexing::Slice(12, 24)});
 
 		auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
+		//auto Pos3Loss = torch::mse_loss(P3_xyz, T3_xyz);
 
-		auto P_FK = ValidateFeetFK(Pred, LOffsets, ROffsets, true);
+		auto P_FK = ValidateFeetFK(Pred, Offsets_l0, Offsets_l1,true);
 		auto FKLoss = P_FK.err_loss * wFK;
+		//auto P3Loss = Pos3Loss * 0.01f;
 
-		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + (PelvisLoss * wPelvis) + FKLoss;
+		auto BaseLoss = ((Pos1Loss + Pos2Loss + PelvisLoss) * wPos) +  FKLoss;
 
 		// =========================
 		// Temporal smoothing loss
@@ -271,7 +279,7 @@ namespace NR
 		}
 
 		// Suavização EMA para uso em runtime/animação
-		constexpr float emaAlpha = 0.15f;
+		constexpr float emaAlpha = 0.25f;
 		if (!SmoothedOutput.defined() || SmoothedOutput.numel() == 0)
 		{
 			SmoothedOutput = Pred.detach().clone();

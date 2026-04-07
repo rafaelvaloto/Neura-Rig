@@ -5,20 +5,27 @@
     "Inputs": [
       { "Name": "velocity",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 0 },
 
-      { "Name": "bone_l1_r",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 1 },
-      { "Name": "bone_l2_r",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 2 },
-      { "Name": "offset_r",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 3 },
-      { "Name": "spacing_r",       "Space": "-", "Type": "float", "Size": 1, "Offset": 4 },
+      { "Name": "bone_l1_0",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 1 },
+      { "Name": "bone_l2_0",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 2 },
+      { "Name": "bone_l3_0",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 3 },
+      { "Name": "bone_l4_0",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 4 },
+      { "Name": "is_hit_0",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 5 },
 
+      { "Name": "offset_0",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 6 },
+      { "Name": "spacing_0",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 7 },
 
-      { "Name": "bone_l1_l",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 5 },
-      { "Name": "bone_l2_l",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 6 },
-      { "Name": "offset_l",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 7 },
-      { "Name": "spacing_l",        "Space": "-", "Type": "float", "Size": 1, "Offset": 8 },
+      { "Name": "bone_l1_1",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 8 },
+      { "Name": "bone_l2_1",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 9 },
+      { "Name": "bone_l3_1",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 10 },
+      { "Name": "bone_l4_1",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 11 },
+      { "Name": "is_hit_1",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 12 },
 
-      { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 9 },
-      { "Name": "time_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 10 },
-      { "Name": "t_accumulated",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 11 }
+      { "Name": "offset_1",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 13 },
+      { "Name": "spacing_1",       "Space": "-",  "Type": "float", "Size": 1, "Offset": 14 },
+
+      { "Name": "t_cycle",         "Space": "-",  "Type": "float", "Size": 1, "Offset": 15 },
+      { "Name": "time_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 16 },
+      { "Name": "reserved",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 17 }
     ],
     "Bindings": [
       { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Size": 6, "Offset": 0 },
@@ -34,17 +41,19 @@
     ],
     "Parameters": {
       "Constants": {
-        "gait_scale": 3.95,
+        "gait_scale": 2.2,
         "step_height": 0.45,
-        "max_pitch_norm": 0.65,
-        "pelvisOffset": 0.06
+        "max_pitch_norm": 0.65
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
-        "offset"  : ["offset_r", "offset_l"],
-        "bone_l1" : ["bone_l1_r", "bone_l1_l"],
-        "bone_l2" : ["bone_l2_r", "bone_l2_l"],
-        "spacing" : ["spacing_r", "spacing_l"],
+        "is_hit"  : ["is_hit_0", "is_hit_1"],
+        "offset"  : ["offset_0", "offset_1"],
+        "spacing" : ["spacing_0", "spacing_1"],
+        "bone_l1" : ["bone_l1_0", "bone_l1_1"],
+        "bone_l2" : ["bone_l2_0", "bone_l2_1"],
+        "bone_l3" : ["bone_l3_0", "bone_l3_1"],
+        "bone_l4" : ["bone_l4_0", "bone_l4_1"],
         "t_cycle" : ["t_cycle", "t_cycle"]
       }
     },
@@ -52,20 +61,21 @@
       {
         "Name": "Humanoid_Foot_Ik_Curve",
         "Logic": {
-          "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
+          "stride_len": "sqrt(velocity / (bone_l1 + bone_l2 + bone_l3 + bone_l4))",
           "stride_freq": "velocity / stride_len",
           "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "min(bone_l2 * 0.6, step_height)"
+          "height_offset": "min(bone_l2 * 0.85, step_height)",
+          "p_offset": "(bone_l1 + bone_l2 + bone_l3)"
         },
         "Phases": [
           {
             "id": "stance",
             "condition": "linear_cycle < 0.0",
-            "offset_x": "(bone_l1 + bone_l2 + pelvisOffset)",
+            "offset_x": "p_offset",
             "offset_y": "((linear_cycle + 0.5) * stride_len)",
-            "offset_z": "0.05",
+            "offset_z": "spacing",
             "rot_pitch": "0.0",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
@@ -73,9 +83,9 @@
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
-            "offset_x": "(bone_l1 + bone_l2 + pelvisOffset) - (height_offset * sin(_pi * linear_cycle))",
+            "offset_x": "(p_offset - (height_offset * sin(_pi * linear_cycle)))",
             "offset_y": "-((linear_cycle - 0.5) * stride_len)",
-            "offset_z": "0.05",
+            "offset_z": "spacing",
             "rot_pitch": "0.0",
             "rot_yaw": "0.0",
             "rot_roll": "0.0"
@@ -90,12 +100,12 @@
           "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "min(bone_l2 * 1.0, step_height)"
+          "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
         "Phases": [
           {
-            "id": "stance",
-            "condition": "linear_cycle < 0.0",
+            "id": "toe_off",
+            "condition": "linear_cycle > -0.4 && linear_cycle < 0.0",
             "offset_x": "0.0",
             "offset_y": "0.0",
             "offset_z": "0.0",
@@ -104,7 +114,7 @@
             "rot_roll": "0.0"
           },
           {
-            "id": "swing",
+            "id": "landing",
             "condition": "linear_cycle >= 0.0",
             "offset_x": "0.0",
             "offset_y": "0.0",
@@ -117,7 +127,7 @@
       },
       {
         "Name": "Humanoid_Calf_Ik_Curve",
-        "Limits": { "MinX": -65.0, "MaxX": 20.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
+        "Limits": { "MinX": -90.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
@@ -150,7 +160,7 @@
       },
       {
         "Name": "Humanoid_Thigh_Ik_Curve",
-        "Limits": { "MinX": -180.0, "MaxX": 165.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
+        "Limits": { "MinX": -180.0, "MaxX": 195.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -15.0, "MaxZ": 15.0 },
         "Logic": {
           "stride_len": "sqrt(velocity / (bone_l1 + bone_l2))",
           "stride_freq": "velocity / stride_len",
@@ -197,7 +207,7 @@
             "condition": "1.0",
             "offset_x": "0.0",
             "offset_y": "0.0",
-            "offset_z": "0.90",
+            "offset_z": "(bone_l1 + bone_l2 + bone_l3 + bone_l4)",
             "rot_pitch": "0.0",
             "rot_yaw": "1.570796",
             "rot_roll": "0.0"
@@ -212,7 +222,7 @@
           "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "min(bone_l2 * 1.0, step_height)"
+          "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
         "Phases": [
           {
@@ -235,7 +245,7 @@
           "T_gait": "(1.0 / stride_freq) * gait_scale",
           "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
           "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "min(bone_l2 * 1.0, step_height)"
+          "height_offset": "min(bone_l2 * 0.6, step_height)"
         },
         "Phases": [
           {
@@ -252,10 +262,10 @@
       }
     ],
     "Outputs": [
-      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 36, "Offset": 0 },
-      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 12, "Offset": 36 },
-      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 48 },
-      { "Name": "spine_ik", "Space": "LS", "Type": "vec3",  "Size": 6, "Offset": 54 }
+      { "Name": "foot_ik", "Space": "LS", "Type": "vec3",  "Size": 24, "Offset": 0 },
+      { "Name": "legs_ik", "Space": "LS", "Type": "vec3",  "Size": 24, "Offset": 24 },
+      { "Name": "pelvis_ik", "Space": "LS", "Type": "vec3", "Size": 6, "Offset": 48 },
+      { "Name": "spine_ik",  "Space": "LS", "Type": "vec3", "Size": 6, "Offset": 54 }
     ]
   }
 }

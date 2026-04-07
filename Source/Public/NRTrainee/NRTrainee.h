@@ -89,8 +89,8 @@ namespace NR
 
 		[[nodiscard]] FootValidationPair ValidateFeetFK(
 			const torch::Tensor& pred,
-			const std::vector<int64_t>& leftOffsets,
 			const std::vector<int64_t>& rightOffsets,
+			const std::vector<int64_t>& leftOffsets,
 			bool anglesAreDegrees = true)
 		{
 			FootValidationPair result;
@@ -126,7 +126,7 @@ namespace NR
 
 							auto diffMin = torch::clamp(minBound - rTensor, 0.0f);
 							auto diffMax = torch::clamp(rTensor - maxBound, 0.0f);
-							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 1.0f;
+							result.err_loss = result.err_loss + (diffMin.pow(2).sum() + diffMax.pow(2).sum()) * 10.0f;
 
 							rTensor = torch::clamp(rTensor, minBound, maxBound);
 						}
@@ -172,13 +172,16 @@ namespace NR
 				auto p0_tensor = readRotWithLimit(rotationOffsets[1], thighBindingIdx, true); // Thigh
 				auto p1_tensor = readRotWithLimit(rotationOffsets[0], calfBindingIdx, false); // Calf
 
-				float L1 = 0.457519f;
+				float L1 = 0.457520f;
 				float L2 = 0.417055f;
+				float L3 = 0.151158f;
+				float L4 = 0.050000f;
 
 				// Bone lengths
 				auto pelvisOffset = pred.index({0, torch::indexing::Slice(48, 48 + 3)});
+				auto pelvisBase = torch::tensor({0.0f, 0.0f, (L1 + L2 + L3 + L4)}, pred.options());
 				auto pelvisRotation = pred.index({0, torch::indexing::Slice(48 + 3, 48 + 6)});
-				auto hipPos = pelvisOffset;
+				auto hipPos = pelvisOffset + pelvisBase;
 
 				// Forward Kinematics (differentiable)
 				auto mThigh = torch::mm(getEulerXYZ(pelvisRotation), getEulerXYZ(p0_tensor)); // Multiplica pelvis * thigh
