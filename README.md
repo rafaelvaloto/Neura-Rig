@@ -1,18 +1,18 @@
 ﻿# 🧠 NeuraRig
 
-**NeuraRig** is a high-performance C++20 library for **Neural Inverse Kinematics (IK)** and procedural character animation.
-
-Unlike traditional, mathematically rigid IK solvers, NeuraRig leverages a **Hybrid Neural Approach**. It combines deterministic gait physics with **Deep Learning** to solve complex skeletal hierarchies, ensuring biologically plausible movement with the performance of a specialized **LibTorch (PyTorch C++)** backend.
 
 [![Status](https://img.shields.io/badge/status-active--development-green)](#)
 [![C++](https://img.shields.io/badge/language-C%2B%2B20-blue)](https://en.cppreference.com/w/cpp/20)
 [![LibTorch](https://img.shields.io/badge/backend-LibTorch-red)](https://pytorch.org/cppdocs/)
+---
+
+
+### NeuraRig: Neural Inverse Kinematics & Procedural Animation
+NeuraRig is a high-performance C++20 library dedicated to Neural Inverse Kinematics (NIK) and procedural character animation.
+
 
 ---
 
-## 🚀 Breakthrough: Hybrid Neural Stride Logic
-
-NeuraRig has reached a new milestone in character locomotion, merging pure neural inference with Forward Kinematics (FK) constraints.
 
 #### 📊 Training Performance Logs
 ```text
