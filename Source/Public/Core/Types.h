@@ -202,6 +202,10 @@ namespace NR
 			float MaxY = 360.0f;
 			float MinZ = -360.0f;
 			float MaxZ = 360.0f;
+
+			[[nodiscard]] bool IsZero() const {
+				return MinX == 0.0f && MaxX == 0.0f && MinY == 0.0f && MaxY == 0.0f && MinZ == 0.0f && MaxZ == 0.0f;
+			}
 		};
 		RotationLimit Limits;
 

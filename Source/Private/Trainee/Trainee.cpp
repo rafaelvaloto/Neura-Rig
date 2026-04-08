@@ -13,17 +13,17 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#include "NRTrainee/NRTrainee.h"
+#include "Trainee/Trainee.h"
 
 #include <ranges>
 
-#include "NRCore/NRRules.h"
-#include "NRCore/NRTypes.h"
+#include "Core/Rules.h"
+#include "Core/Types.h"
 
 namespace NR
 {
 	template<FloatingPoint T>
-	NRTrainee<T>::NRTrainee(std::shared_ptr<INRModel<T> > TargetModel, NRModelProfile Rig, NRRules& Ev, const double LearningRate)
+	Trainee<T>::Trainee(std::shared_ptr<IModel<T> > TargetModel, NRModelProfile Rig, Rules& Ev, const double LearningRate)
 		: TargetModel(TargetModel)
 		  , Evaluator(Ev)
 		  , RigDesc(std::move(Rig))
@@ -43,7 +43,7 @@ namespace NR
 				auto& F_rule = RigDesc.Bindings[i].Rules[j];
 				if (F_rule.Name.empty())
 				{
-					std::cerr << "[NRTrainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
+					std::cerr << "[Trainee] Rule not found: " << RigDesc.Bindings[i].RuleName << std::endl;
 					continue;
 				}
 				Evaluator.Setup(F_rule, i);
@@ -52,7 +52,7 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	torch::Tensor NRTrainee<T>::ChooseBestPrediction(
+	torch::Tensor Trainee<T>::ChooseBestPrediction(
 		const std::vector<torch::Tensor>& candidates,
 		const torch::Tensor& target,
 		const torch::Tensor& prevPred)
@@ -87,7 +87,7 @@ namespace NR
 	}
 
 	template<FloatingPoint T>
-	float NRTrainee<T>::TrainStep(const std::vector<float>& InputFloats)
+	float Trainee<T>::TrainStep(const std::vector<float>& InputFloats)
 	{
 		int32_t InCount = RigDesc.GetRequiredInputSize();
 		int32_t BatchSize = static_cast<int32_t>(InputFloats.size()) / InCount;
@@ -109,11 +109,11 @@ namespace NR
 	int frameCounter = 0;
 
 	template<FloatingPoint T>
-	IKLossResult NRTrainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
+	IKLossResult Trainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
-		constexpr float wPos = 1.0f;
-		constexpr float wPelvis = 0.1f;
-		constexpr float wFK = 0.1f;
+		constexpr float wPos = 2.0f;
+		constexpr float wPelvis = 1.0f;
+		constexpr float wFK = 1.0f;
 		constexpr float wTemporal = 0.35f;
 		constexpr float wAccel = 0.20f;
 		constexpr float wSmoothOut = 0.15f;
@@ -132,18 +132,22 @@ namespace NR
 			{
 				if (F_rule.Name.empty())
 				{
-					std::cerr << "[NRTrainee] Rule not found: " << Bindings.RuleName << std::endl;
+					std::cerr << "[Trainee] Rule not found: " << Bindings.RuleName << std::endl;
+					continue;
+				}
+
+				if (F_rule.Logic.empty())
+				{
 					continue;
 				}
 
 				Evaluator.SetTensorInputs(i, F_rule, RigDesc, InputTensor);
-
 				for (const auto& [Name, Expr] : F_rule.Logic)
 				{
 					auto it = varMap.find(Name);
 					if (it == varMap.end())
 					{
-						std::cerr << "[NRTrainee] Logic variable not found: " << Name << std::endl;
+						std::cerr << "[Trainee] Logic variable not found: " << Name << std::endl;
 						continue;
 					}
 					*(it->second) = Evaluator.Eval(i, Expr);
@@ -155,7 +159,7 @@ namespace NR
 					auto it = varMap.find(condName);
 					if (it == varMap.end())
 					{
-						std::cerr << "[NRTrainee] Phase condition variable not found: " << condName << std::endl;
+						std::cerr << "[Trainee] Phase condition variable not found: " << condName << std::endl;
 						continue;
 					}
 
@@ -190,41 +194,33 @@ namespace NR
 		for (size_t i = 0; i < B_size; ++i)
 		{
 			auto& Bindings = RigDesc.Bindings[i];
-			if (Bindings.BoneName == "bone_l1_0" || Bindings.BoneName == "bone_l2_0")
+			if (Bindings.BoneName == "thigh_r" || Bindings.BoneName == "calf_r")
 				Offsets_l0.push_back(Bindings.Offset + 3);
-			else if (Bindings.BoneName == "bone_l1_1" || Bindings.BoneName == "bone_l2_1")
+			else if (Bindings.BoneName == "thigh_l" || Bindings.BoneName == "calf_l")
 				Offsets_l1.push_back(Bindings.Offset + 3);
 		}
 
-		// =========================
 		// Loss base
-		// =========================
-		auto P_Pelvis = Pred.index({0, torch::indexing::Slice(48, 54)});
-		auto T_Pelvis = T_ideal.index({0, torch::indexing::Slice(48, 54)});
+		auto P_Pelvis = Pred.index({0, torch::indexing::Slice(0, 7)});
+		auto T_Pelvis = T_ideal.index({0, torch::indexing::Slice(0, 7)});
 		auto PelvisLoss = torch::mse_loss(P_Pelvis, T_Pelvis);
 
-		auto P1_xyz = Pred.index({0, torch::indexing::Slice(0, 3)});
-		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(0, 3)});
+		auto P1_xyz = Pred.index({0, torch::indexing::Slice(7, 10)});
+		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(7, 10)});
 
-		auto P2_xyz = Pred.index({0, torch::indexing::Slice(6, 9)});
-		auto T2_xyz = T_ideal.index({0, torch::indexing::Slice(6, 9)});
-
-		// auto P3_xyz = Pred.index({0, torch::indexing::Slice(12, 24)});
-		// auto T3_xyz = T_ideal.index({0, torch::indexing::Slice(12, 24)});
+		auto P2_xyz = Pred.index({0, torch::indexing::Slice(14, 17)});
+		auto T2_xyz = T_ideal.index({0, torch::indexing::Slice(14, 17)});
 
 		auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
-		//auto Pos3Loss = torch::mse_loss(P3_xyz, T3_xyz);
 
 		auto P_FK = ValidateFeetFK(Pred, Offsets_l0, Offsets_l1,true);
 		auto FKLoss = P_FK.err_loss * wFK;
 		//auto P3Loss = Pos3Loss * 0.01f;
 
-		auto BaseLoss = ((Pos1Loss + Pos2Loss + PelvisLoss) * wPos) +  FKLoss;
+		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + (PelvisLoss * wPelvis) +  FKLoss;
 
-		// =========================
 		// Temporal smoothing loss
-		// =========================
 		auto TemporalLoss = torch::tensor(0.0f, options);
 		auto AccelLoss = torch::tensor(0.0f, options);
 		auto SmoothOutLoss = torch::tensor(0.0f, options);
@@ -247,9 +243,7 @@ namespace NR
 			SmoothOutLoss = torch::mse_loss(Pred, SmoothedOutput);
 		}
 
-		// =========================
 		// Limites / consistência física
-		// =========================
 		auto ConstraintLoss = torch::tensor(0.0f, options);
 
 		auto clampPenalty = [&](const torch::Tensor& v, float mn, float mx) {
@@ -265,9 +259,7 @@ namespace NR
 			SmoothOutLoss * wSmoothOut;
 
 
-		// =========================
 		// Atualiza histórico
-		// =========================
 		PredHistory2 = PredHistory.defined() ? PredHistory.detach().clone() : torch::Tensor();
 		PredHistory = Pred.detach().clone();
 
@@ -279,7 +271,7 @@ namespace NR
 		}
 
 		// Suavização EMA para uso em runtime/animação
-		constexpr float emaAlpha = 0.25f;
+		constexpr float emaAlpha = 0.30f;
 		if (!SmoothedOutput.defined() || SmoothedOutput.numel() == 0)
 		{
 			SmoothedOutput = Pred.detach().clone();
@@ -306,20 +298,20 @@ namespace NR
 
 
 	template<FloatingPoint T>
-	void NRTrainee<T>::SaveWeights(const std::string& Path)
+	void Trainee<T>::SaveWeights(const std::string& Path)
 	{
 		torch::save(TargetModel, Path);
 	}
 
 	template<FloatingPoint T>
-	void NRTrainee<T>::LoadWeights(const std::string& Path)
+	void Trainee<T>::LoadWeights(const std::string& Path)
 	{
 		torch::load(TargetModel, Path);
 		TargetModel->train();
 	}
 
 	template<FloatingPoint T>
-	void NRTrainee<T>::Reset()
+	void Trainee<T>::Reset()
 	{
 		for (auto& p : TargetModel->parameters())
 		{
@@ -344,10 +336,10 @@ namespace NR
 
 		IdealTargets = torch::zeros({1, RigDesc.GetRequiredOutputSize()});
 		Predicated = torch::zeros({1, RigDesc.GetRequiredOutputSize()});
-		std::cout << "[NRTrainee] Reset complete. Clean state for training." << std::endl;
+		std::cout << "[Trainee] Reset complete. Clean state for training." << std::endl;
 	}
 
 
-	template class NRTrainee<float>;
-	template class NRTrainee<double>;
+	template class Trainee<float>;
+	template class Trainee<double>;
 } // namespace NR

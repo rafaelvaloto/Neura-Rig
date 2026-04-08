@@ -1,5 +1,5 @@
-﻿#include "NRNetwork/NRNetworkServer.h"
-#include "NRNetwork/NRNetworkClient.h"
+﻿#include "Network/NetworkServer.h"
+#include "Network/NetworkClient.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -7,8 +7,8 @@
 
 int main()
 {
-    NR::NRNetworkServer server;
-    NR::NRNetworkClient client;
+    NR::NetworkServer server;
+    NR::NetworkClient client;
 
     const int testPort = 8080;
     

@@ -4,12 +4,10 @@ set(SERVER_SOURCES "Integration/TestTrainerMachine.cpp")
 
 # 2. Create executables
 add_executable(NRTestNetwork ${NETWORK_SOURCES})
-add_executable(NRTestRules ${RULES_SOURCES})
-add_executable(NRTestTrain ${TRAINEE_SOURCES})
 add_executable(NRTestServer ${SERVER_SOURCES})
 
 # 3. Configure compilation options
-foreach(TARGET_NAME NRTestServer NRTestTrain NRTestRules NRTestNetwork)
+foreach(TARGET_NAME NRTestServer NRTestNetwork)
     if (MSVC)
         # Opções gerais
         target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
@@ -47,5 +45,14 @@ foreach(TARGET_NAME NRTestServer NRTestTrain NRTestRules NRTestNetwork)
                 "$<TARGET_FILE_DIR:${TARGET_NAME}>/Datasets"
                 COMMENT "Copy Datasets from ${TARGET_NAME}..."
         )
+
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../trained_model.pt")
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../trained_model.pt"
+                    "$<TARGET_FILE_DIR:${TARGET_NAME}>/Datasets/trained_model.pt"
+                    COMMENT "Copy existing trained model to build directory..."
+            )
+        endif()
     endif()
 endforeach()

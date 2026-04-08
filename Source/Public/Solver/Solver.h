@@ -18,8 +18,8 @@
 
 #include <utility>
 
-#include "NRCore/NRTypes.h"
-#include "NRInterfaces/INRModel.h"
+#include "Core/Types.h"
+#include "Interfaces/IModel.h"
 
 namespace NR
 {
@@ -29,7 +29,7 @@ namespace NR
 	 * This class wraps a neural network model and provides functionality to solve
 	 * inverse kinematics or other rig-related problems using machine learning.
 	 */
-	class NRSolver
+	class Solver
 	{
 	public:
 		/**
@@ -38,7 +38,7 @@ namespace NR
 		 * @param Description Configuration for the rig to be solved.
 		 * @param DeviceTarget The target device (CPU or CUDA) where tensor computations will be executed. Defaults to CPU.
 		 */
-		explicit NRSolver(const std::shared_ptr<INRModel<float>>& ModelNetwork, const NRModelProfile& Description, const torch::Device DeviceTarget = torch::kCPU)
+		explicit Solver(const std::shared_ptr<IModel<float>>& ModelNetwork, const NRModelProfile& Description, const torch::Device DeviceTarget = torch::kCPU)
 		    : NeuralNetwork(ModelNetwork)
 		    , RigDesc(Description)
 		    , Device(DeviceTarget)
@@ -58,7 +58,7 @@ namespace NR
 		/**
 		 * @brief Unique pointer to the neural network model used for solving.
 		 */
-		std::shared_ptr<INRModel<float>> NeuralNetwork;
+		std::shared_ptr<IModel<float>> NeuralNetwork;
 
 		/**
 		 * @brief Device where tensor computations will be executed (CPU or CUDA).

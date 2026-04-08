@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "NRCore/NRParse.h"
-#include "NRNetwork/NRNetworkServer.h"
-#include "NRNetwork/NRNetworkClient.h"
-#include "NRSolver/NRSolver.h"
-#include "NRTrainee/NRTrainee.h"
+#include "Core/Parse.h"
+#include "Network/NetworkServer.h"
+#include "Network/NetworkClient.h"
+#include "Solver/Solver.h"
+#include "Trainee/Trainee.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -27,7 +27,7 @@
 #include <Windows.h>
 #endif
 
-class NRMultiHeadModel : public NR::INRModel<float>
+class NRMultiHeadModel : public NR::IModel<float>
 {
 public:
 	torch::nn::Sequential backbone{nullptr};
@@ -50,28 +50,25 @@ public:
 			                           torch::nn::ELU()
 			                           ));
 
-		head_foot_r = register_module("head_foot_r", torch::nn::Linear(hidden, 6));
-		head_foot_l = register_module("head_foot_l", torch::nn::Linear(hidden, 6));
-		head_bal_r = register_module("head_bal_r", torch::nn::Linear(hidden, 6));
-		head_bal_l = register_module("head_bal_l", torch::nn::Linear(hidden, 6));
-		head_leg_r = register_module("head_leg_r", torch::nn::Linear(hidden, 12));
-		head_leg_l = register_module("head_leg_l", torch::nn::Linear(hidden, 12));
-		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 6));
-		head_spine_ik = register_module("head_spine_ik", torch::nn::Linear(hidden, 6));
+		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 7));
+		head_foot_r = register_module("head_foot_r", torch::nn::Linear(hidden, 7));
+		head_foot_l = register_module("head_foot_l", torch::nn::Linear(hidden, 7));
+		head_leg_r = register_module("head_leg_r", torch::nn::Linear(hidden, 14));
+		head_leg_l = register_module("head_leg_l", torch::nn::Linear(hidden, 14));
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override
 	{
 		auto feat = backbone->forward(x);
-		auto h_foot_l = head_foot_l->forward(feat);
-		auto h_foot_r = head_foot_r->forward(feat);
-		auto h_ball_l = head_bal_l->forward(feat);
-		auto h_ball_r = head_bal_r->forward(feat);
-		auto h_leg_l = head_leg_l->forward(feat);
-		auto h_leg_r = head_leg_r->forward(feat);
-		auto h_spine = head_spine_ik->forward(feat);
 		auto h_pelvis = head_pelvis_ik->forward(feat);
-		return torch::cat({h_foot_r, h_foot_l, h_ball_r, h_ball_l, h_leg_r, h_leg_l, h_pelvis, h_spine}, 1);
+		auto h_foot_r = head_foot_r->forward(feat);
+		auto h_foot_l = head_foot_l->forward(feat);
+		auto h_leg_r = head_leg_r->forward(feat);
+		auto h_leg_l = head_leg_l->forward(feat);
+
+		// Outputs: pelvis_ik (7), foot_ik (14), legs_ik (28)
+		// Total: 7 + 14 + 28 = 49
+		return torch::cat({h_pelvis, h_foot_r, h_foot_l, h_leg_r, h_leg_l}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override
@@ -92,27 +89,25 @@ int main()
 {
 	using namespace NR;
 
-	NRNetworkServer Server;
+	NetworkServer Server;
 	if (!Server.Start(8005))
 	{
 		std::cerr << "CRITICAL: Could not start main server on port 8005." << std::endl;
 		return 1;
 	}
 
-	NRNetworkClient ClientSolver;
-	NRNetworkClient ClientDebug;
-
 	NRModelProfile activeProfile;
-	NRRules activeRules;
-	std::shared_ptr<NRSolver> solver = nullptr;
+	Rules activeRules;
+	std::shared_ptr<Solver> solver = nullptr;
 
 	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
 	if (!std::filesystem::exists(DataAssetPath))
 	{
 		DataAssetPath = "../Tests/Datasets/Foot_IK.json"; // Fallback for some build configurations
 	}
+	DataAssetPath = std::filesystem::absolute(DataAssetPath).string();
 
-	if (!NRParse::LoadProfileFromJson(DataAssetPath, activeProfile))
+	if (!Parse::LoadProfileFromJson(DataAssetPath, activeProfile))
 	{
 		std::cerr << "Failed to load data asset: " << DataAssetPath << std::endl;
 		return 1;
@@ -128,14 +123,18 @@ int main()
 	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512, out_size);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<NRTrainee<float> >(model, activeProfile, activeRules, 4e-3);
+	auto trainee = std::make_shared<Trainee<float> >(model, activeProfile, activeRules, 4e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
-	std::string ModelSavePath = "trained_model.pt";
+	std::string ModelSavePath = "Datasets/trained_model.pt";
 	if (!std::filesystem::exists(ModelSavePath))
 	{
-		ModelSavePath = "../trained_model.pt"; // Fallback for some build configurations
+		ModelSavePath = "../Tests/Datasets/trained_model.pt"; // Fallback para carregar da raiz se necessário, ou outros setups
 	}
+	
+	// Garantir que temos o caminho absoluto
+	ModelSavePath = std::filesystem::absolute(ModelSavePath).string();
+	
 	if (std::filesystem::exists(ModelSavePath))
 	{
 		try
@@ -151,6 +150,9 @@ int main()
 
 	if (Server.IsRunning())
 	{
+		NetworkClient ClientDebug;
+		NetworkClient ClientSolver;
+		
 		std::cout << "----------------------------------" << std::endl;
 		std::cout << "Server Started!" << std::endl;
 		std::cout << "Main server listening on port: 8005" << std::endl;
@@ -208,9 +210,9 @@ int main()
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 0.01f)
+					if (!solver && loss < 0.1f)
 					{
-						solver = std::make_shared<NRSolver>(model, activeProfile);
+						solver = std::make_shared<Solver>(model, activeProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
 					}
 

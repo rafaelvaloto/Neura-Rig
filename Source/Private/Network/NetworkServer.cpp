@@ -1,12 +1,12 @@
 ﻿// Project: NeuraRig
 // Copyright (c) 2026 Rafael Valoto
 
-#include "NRNetwork/NRNetworkServer.h"
+#include "Network/NetworkServer.h"
 #include <iostream>
 
 namespace NR
 {
-	NRNetworkServer::NRNetworkServer()
+	NetworkServer::NetworkServer()
 	    : serverSocket(INVALID_SOCKET)
 	    , bIsRunning(false)
 	{
@@ -14,13 +14,13 @@ namespace NR
 		WSAStartup(MAKEWORD(2, 2), &wsaData);
 	}
 
-	NRNetworkServer::~NRNetworkServer()
+	NetworkServer::~NetworkServer()
 	{
 		Stop();
 		WSACleanup();
 	}
 
-	bool NRNetworkServer::Start(int port)
+	bool NetworkServer::Start(int port)
 	{
 		serverSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 		if (serverSocket == INVALID_SOCKET)
@@ -46,7 +46,7 @@ namespace NR
 		return true;
 	}
 
-	bool NRNetworkServer::Receive(std::vector<float>& outData)
+	bool NetworkServer::Receive(std::vector<float>& outData)
 	{
 		sockaddr_in clientAddr{};
 		int clientSize = sizeof(clientAddr);
@@ -62,7 +62,7 @@ namespace NR
 		return true;
 	}
 
-	void NRNetworkServer::Stop()
+	void NetworkServer::Stop()
 	{
 		if (serverSocket != INVALID_SOCKET)
 		{

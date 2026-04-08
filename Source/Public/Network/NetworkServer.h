@@ -17,11 +17,11 @@ namespace NR
 	/**
 	 * @brief Simplified UDP server to receive animation data (floats).
 	 */
-	class NRNetworkServer
+	class NetworkServer
 	{
 	public:
-		NRNetworkServer();
-		~NRNetworkServer();
+		NetworkServer();
+		~NetworkServer();
 
 		/**
 		 * @brief Starts the server on a specific port.

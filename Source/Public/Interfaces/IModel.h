@@ -15,8 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include "NRCore/NRCore.h"
-#include "NRCore/NRTypes.h"
+#include "Core/Core.h"
+#include "Core/Types.h"
 
 namespace NR
 {
@@ -28,10 +28,10 @@ namespace NR
 	 * managing INR-related data and performing predictions or computations. It
 	 * is the primary interface for interacting with INR-specific operations.
 	 */
-	class INRModel : public torch::nn::Module
+	class IModel : public torch::nn::Module
 	{
 	public:
-		~INRModel() override = default;
+		~IModel() override = default;
 
 		/**
 		 * @brief Represents a forward operation or entity for processing or calculations.

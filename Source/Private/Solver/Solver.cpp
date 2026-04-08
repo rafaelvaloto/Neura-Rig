@@ -13,11 +13,11 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#include "NRSolver/NRSolver.h"
+#include "Solver/Solver.h"
 
 namespace NR
 {
-	std::vector<float> NRSolver::Solve(const std::vector<float>& Inputs)
+	std::vector<float> Solver::Solve(const std::vector<float>& Inputs)
 	{
 		int32_t InCount = RigDesc.GetRequiredInputSize();
 		int32_t batchSize = static_cast<int32_t>(Inputs.size()) / InCount;

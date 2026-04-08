@@ -13,11 +13,11 @@ namespace NR
 	/**
 	 * @brief Simplified UDP client to send animation data (floats).
 	 */
-	class NRNetworkClient
+	class NetworkClient
 	{
 	public:
-		NRNetworkClient();
-		~NRNetworkClient();
+		NetworkClient();
+		~NetworkClient();
 
 		/**
 		 * @brief Sends a vector of floats to a specific address and port.

@@ -1,19 +1,19 @@
 ﻿// Project: NeuraRig
 // Copyright (c) 2026 Rafael Valoto
 
-#include "NRNetwork/NRNetworkClient.h"
+#include "Network/NetworkClient.h"
 #include <ws2tcpip.h>
 
 namespace NR
 {
-	NRNetworkClient::NRNetworkClient()
+	NetworkClient::NetworkClient()
 	{
 		WSADATA wsaData;
 		WSAStartup(MAKEWORD(2, 2), &wsaData);
 		clientSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	}
 
-	NRNetworkClient::~NRNetworkClient()
+	NetworkClient::~NetworkClient()
 	{
 		if (clientSocket != INVALID_SOCKET)
 		{
@@ -22,7 +22,7 @@ namespace NR
 		WSACleanup();
 	}
 
-	bool NRNetworkClient::Send(const std::vector<float>& data, const std::string& ip, int port)
+	bool NetworkClient::Send(const std::vector<float>& data, const std::string& ip, int port)
 	{
 		if (clientSocket == INVALID_SOCKET || data.empty())
 		{

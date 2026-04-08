@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "muParser.h"
-#include "NRTypes.h"
+#include "Types.h"
 
 static mu::value_type fmod_wrapper(mu::value_type v1, mu::value_type v2)
 {
@@ -34,14 +34,14 @@ static mu::value_type pow_wrapper(mu::value_type v1, mu::value_type v2)
 
 namespace NR
 {
-	class NRRules
+	class Rules
 	{
 	public:
 		double deltaTime = 0.5f;
 		std::vector<mu::Parser> Parsers;
 		std::vector<std::map<std::string, double>> Vars;
 
-		NRRules() = default;
+		Rules() = default;
 
 		void Setup(const NRRule& rule, int bindingIndex)
 		{
@@ -99,6 +99,11 @@ namespace NR
 						auto T_it = std::find_if(logics.begin(), logics.end(), [&](const auto& logic) {
 							return logic.Name == "T_gait";
 						});
+						if (T_it == logics.end())
+						{
+							continue;
+						}
+
 						const auto T_gait = Eval(bindingIndex, T_it->Expr);
 						if (T_gait > 0.0)
 						{
