@@ -89,6 +89,7 @@ namespace NR
 
 		[[nodiscard]] FootValidationPair ValidateFeetFK(
 			const torch::Tensor& pred,
+			const torch::Tensor& target,
 			const std::vector<int64_t>& rightOffsets,
 			const std::vector<int64_t>& leftOffsets,
 			bool anglesAreDegrees = true)
@@ -149,14 +150,23 @@ namespace NR
 
 				float L1 = 0.457520f;
 				float L2 = 0.417055f;
+				float L3 = 0.151158f;
 				float L4 = 0.050000f;
 
 				auto pelvisOffset = pred.index({0, torch::indexing::Slice(0, 3)});
-				auto pelvisBase = torch::tensor({(L1 + L2 + L4), 0.0f, 0.0f}, pred.options());
 				auto qPelvis = pred.index({0, torch::indexing::Slice(3, 7)});
-				auto hipPos = pelvisOffset + pelvisBase;
 
+				auto T_pelvisBase = target.index({0, torch::indexing::Slice(0, 3)});
+				auto T_qPelvisBase = target.index({0, torch::indexing::Slice(3, 7)});
+
+				result.err_loss = result.err_loss + torch::mse_loss(pelvisOffset, T_pelvisBase) * 1.0f;
+				result.err_loss = result.err_loss + torch::mse_loss(qPelvis, T_qPelvisBase) * 1.0f;
+
+
+				auto hipPos = pelvisOffset;
 				auto mPelvis = getQuatRotMat(qPelvis);
+				// std::cout << "hipPos: " << hipPos << std::endl;
+				// std::cout << "mPelvis: " << mPelvis << std::endl;
 				auto mThigh = torch::mm(mPelvis, getQuatRotMat(qThigh));
 				auto vThigh = torch::tensor({0.0f, 0.0f, -L1}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, vThigh).squeeze(1);
@@ -165,7 +175,7 @@ namespace NR
 				auto vCalf = torch::tensor({0.0f, 0.0f, -L2}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mCalf, vCalf).squeeze(1);
 
-				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - hipPos));
+				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos + hipPos));
 				result.err_loss = result.err_loss + posErrTensor;
 			};
 

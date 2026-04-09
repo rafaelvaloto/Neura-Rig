@@ -33,18 +33,18 @@
       { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },   "Size": 7, "Offset": 7 },
       { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },   "Size": 7, "Offset": 14},
 
-      { "Name": "calf_r", "Target": "", "Limits": { "MinX": -90.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 21},
-      { "Name": "calf_l", "Target": "", "Limits": { "MinX": -90.0, "MaxX": 15.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 28},
+      { "Name": "calf_r", "Target": "", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 21},
+      { "Name": "calf_l", "Target": "", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 28},
 
-      { "Name": "thigh_r", "Target": "","Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": -180.0, "MaxY": 165.0, "MinZ": 0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 35},
-      { "Name": "thigh_l", "Target": "","Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": -180.0, "MaxY": 165.0, "MinZ": 0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 42}
+      { "Name": "thigh_r", "Target": "","Limits": { "MinX": -0.0, "MaxX": 0.0, "MinY": -90.0, "MaxY": 65.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 35},
+      { "Name": "thigh_l", "Target": "","Limits": { "MinX": -0.0, "MaxX": 0.0, "MinY": -65.0, "MaxY": 90.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 42}
     ],
     "Parameters": {
       "Constants": {
         "k": 1.2,
         "gait_scale": 0.8,
-        "step_height": 0.45,
-        "max_pitch_norm": 0.65
+        "step_height": 0.30,
+        "max_pitch_norm": 0.25
       },
       "Variables": {
         "velocity": ["velocity", "velocity"],
@@ -62,26 +62,26 @@
       {
         "Name": "Humanoid_Pelvis_Ik_Curve",
         "Logic": {
-          "p_offset": "(bone_l1 + bone_l2 + bone_l4)"
+          "p_offset": "(bone_l1 + bone_l2)"
         },
         "Phases": [
           {
             "id": "global",
             "condition": "1.0",
-            "offset_x": "p_offset",
+            "offset_x": "0.0",
             "offset_y": "0.0",
-            "offset_z": "0.0",
-            "q1": "-0.022227",
-            "q2": "0.706757",
-            "q3": "0.022227",
-            "qw": "-0.706757"
+            "offset_z": "p_offset",
+            "q1": "0.0",
+            "q2": "0.0",
+            "q3": "0.0",
+            "qw": "1.0"
           }
         ]
       },
       {
         "Name": "Humanoid_Foot_Ik_Curve",
         "Logic": {
-          "p_offset": "(bone_l1 + bone_l2 + bone_l4)",
+          "p_offset": "(bone_l1 + bone_l2 + bone_l3)",
           "stride_len": "k * p_offset * sqrt(velocity / p_offset)",
           "stride_freq": "velocity / stride_len",
           "T_gait": "(1.0 / stride_freq) * gait_scale",
@@ -93,9 +93,9 @@
           {
             "id": "stance",
             "condition": "linear_cycle < 0.0",
-            "offset_x": "p_offset",
-            "offset_y": "((linear_cycle + 0.5) * stride_len)",
-            "offset_z": "spacing",
+            "offset_x": "spacing",
+            "offset_y": "-((linear_cycle + 0.5) * stride_len)",
+            "offset_z": "p_offset",
             "q1": "0.0",
             "q2": "0.0",
             "q3": "0.0",
@@ -104,9 +104,9 @@
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
-            "offset_x": "(p_offset - (height_offset * sin(_pi * linear_cycle)))",
-            "offset_y": "-((linear_cycle - 0.5) * stride_len)",
-            "offset_z": "spacing",
+            "offset_x": "spacing",
+            "offset_y": "((linear_cycle - 0.5) * stride_len)",
+            "offset_z": "p_offset - ( height_offset * sin( _pi * linear_cycle) ) ",
             "q1": "0.0",
             "q2": "0.0",
             "q3": "0.0",

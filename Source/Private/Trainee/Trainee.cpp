@@ -112,7 +112,6 @@ namespace NR
 	IKLossResult Trainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
 		constexpr float wPos = 2.0f;
-		constexpr float wPelvis = 1.0f;
 		constexpr float wFK = 1.0f;
 		constexpr float wTemporal = 0.35f;
 		constexpr float wAccel = 0.20f;
@@ -201,10 +200,6 @@ namespace NR
 		}
 
 		// Loss base
-		auto P_Pelvis = Pred.index({0, torch::indexing::Slice(0, 7)});
-		auto T_Pelvis = T_ideal.index({0, torch::indexing::Slice(0, 7)});
-		auto PelvisLoss = torch::mse_loss(P_Pelvis, T_Pelvis);
-
 		auto P1_xyz = Pred.index({0, torch::indexing::Slice(7, 10)});
 		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(7, 10)});
 
@@ -214,11 +209,10 @@ namespace NR
 		auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
 
-		auto P_FK = ValidateFeetFK(Pred, Offsets_l0, Offsets_l1,true);
+		auto P_FK = ValidateFeetFK(Pred, T_ideal, Offsets_l0, Offsets_l1,true);
 		auto FKLoss = P_FK.err_loss * wFK;
-		//auto P3Loss = Pos3Loss * 0.01f;
 
-		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + (PelvisLoss * wPelvis) +  FKLoss;
+		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + FKLoss;
 
 		// Temporal smoothing loss
 		auto TemporalLoss = torch::tensor(0.0f, options);
