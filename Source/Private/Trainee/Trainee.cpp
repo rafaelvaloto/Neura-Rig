@@ -194,9 +194,9 @@ namespace NR
 		{
 			auto& Bindings = RigDesc.Bindings[i];
 			if (Bindings.BoneName == "thigh_r" || Bindings.BoneName == "calf_r")
-				Offsets_l0.push_back(Bindings.Offset + 3);
+				Offsets_l0.push_back(Bindings.Offset);
 			else if (Bindings.BoneName == "thigh_l" || Bindings.BoneName == "calf_l")
-				Offsets_l1.push_back(Bindings.Offset + 3);
+				Offsets_l1.push_back(Bindings.Offset);
 		}
 
 		// Loss base

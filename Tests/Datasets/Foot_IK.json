@@ -28,16 +28,16 @@
       { "Name": "reserved",        "Space": "-",  "Type": "float", "Size": 1, "Offset": 17 }
     ],
     "Bindings": [
-      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik_Curve", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 0},
+      { "Name": "pelvis", "Target": "Humanoid_Pelvis_Ik", "Limits": { "MinX": -10.0, "MaxX": 10.0, "MinY": -10.0, "MaxY": 10.0, "MinZ": -10.0, "MaxZ": 10.0 }, "Size": 7, "Offset": 0},
 
-      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Curve", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },   "Size": 7, "Offset": 7 },
-      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Curve", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": 0.0, "MaxZ": 0.0 },   "Size": 7, "Offset": 14},
+      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Target", "Limits": { "MinX": -45.0, "MaxX": 45.0, "MinY": -20.0, "MaxY": 20.0, "MinZ": -30.0, "MaxZ": 30.0 },   "Size": 7, "Offset": 7 },
+      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Target", "Limits": { "MinX": -45.0, "MaxX": 45.0, "MinY": -20.0, "MaxY": 20.0, "MinZ": -30.0, "MaxZ": 30.0 },   "Size": 7, "Offset": 14},
 
-      { "Name": "calf_r", "Target": "", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 21},
-      { "Name": "calf_l", "Target": "", "Limits": { "MinX": 0.0, "MaxX": 0.0, "MinY": 0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 28},
+      { "Name": "calf_r", "Target": "Humanoid_Calf_Ik", "Limits": { "MinX": -140.0, "MaxX": 5.0, "MinY": -0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 21},
+      { "Name": "calf_l", "Target": "Humanoid_Calf_Ik", "Limits": { "MinX": -140.0, "MaxX": 5.0, "MinY": -0.0, "MaxY": 0.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 28},
 
-      { "Name": "thigh_r", "Target": "","Limits": { "MinX": -0.0, "MaxX": 0.0, "MinY": -90.0, "MaxY": 65.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 35},
-      { "Name": "thigh_l", "Target": "","Limits": { "MinX": -0.0, "MaxX": 0.0, "MinY": -65.0, "MaxY": 90.0, "MinZ": -0.0, "MaxZ": 0.0 }, "Size": 7, "Offset": 42}
+      { "Name": "thigh_r", "Target": "Humanoid_Thigh_Ik", "Limits": { "MinX": -120.0, "MaxX": 30.0, "MinY": -45.0, "MaxY": 30.0, "MinZ": -40.0, "MaxZ": 50.0 }, "Size": 7, "Offset": 35},
+      { "Name": "thigh_l", "Target": "Humanoid_Thigh_Ik", "Limits": { "MinX": -120.0, "MaxX": 30.0, "MinY": -30.0, "MaxY": 45.0, "MinZ": -50.0, "MaxZ": 40.0 }, "Size": 7, "Offset": 42}
     ],
     "Parameters": {
       "Constants": {
@@ -60,7 +60,7 @@
     },
     "Rules": [
       {
-        "Name": "Humanoid_Pelvis_Ik_Curve",
+        "Name": "Humanoid_Pelvis_Ik",
         "Logic": {
           "p_offset": "(bone_l1 + bone_l2)"
         },
@@ -68,20 +68,58 @@
           {
             "id": "global",
             "condition": "1.0",
-            "offset_x": "0.0",
+            "offset_x": "p_offset",
             "offset_y": "0.0",
-            "offset_z": "p_offset",
-            "q1": "0.0",
-            "q2": "0.0",
-            "q3": "0.0",
-            "qw": "1.0"
+            "offset_z": "0.0",
+            "q1": "-0.022227",
+            "q2": "0.706757",
+            "q3": "0.022227",
+            "qw": "-0.706757"
           }
         ]
       },
       {
-        "Name": "Humanoid_Foot_Ik_Curve",
+        "Name": "Humanoid_Thigh_Ik",
         "Logic": {
-          "p_offset": "(bone_l1 + bone_l2 + bone_l3)",
+          "t_offset": "bone_l1"
+        },
+        "Phases": [
+          {
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "t_offset",
+            "offset_y": "0.0",
+            "offset_z": "0.0",
+            "q1": "0.072944",
+            "q2": "0.023874",
+            "q3": "-0.040190",
+            "qw": "-0.996240"
+          }
+        ]
+      },
+      {
+        "Name": "Humanoid_Calf_Ik",
+        "Logic": {
+          "c_offset": "bone_l2"
+        },
+        "Phases": [
+          {
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "c_offset",
+            "offset_y": "0.0",
+            "offset_z": "0.0",
+            "q1": "0.0",
+            "q2": "0.0",
+            "q3": "-0.009542",
+            "qw": "0.999954"
+          }
+        ]
+      },
+      {
+        "Name": "Humanoid_Foot_Ik_Target",
+        "Logic": {
+          "p_offset": "(bone_l1 + bone_l2 + bone_l3 + bone_l4)",
           "stride_len": "k * p_offset * sqrt(velocity / p_offset)",
           "stride_freq": "velocity / stride_len",
           "T_gait": "(1.0 / stride_freq) * gait_scale",
@@ -93,24 +131,24 @@
           {
             "id": "stance",
             "condition": "linear_cycle < 0.0",
-            "offset_x": "spacing",
+            "offset_x": "-p_offset",
             "offset_y": "-((linear_cycle + 0.5) * stride_len)",
-            "offset_z": "p_offset",
+            "offset_z": "spacing",
             "q1": "0.0",
             "q2": "0.0",
             "q3": "0.0",
-            "qw": "1.0"
+            "qw": "-0.999754"
           },
           {
             "id": "swing",
             "condition": "linear_cycle >= 0.0",
-            "offset_x": "spacing",
+            "offset_x": "(-p_offset) + ( height_offset * sin( _pi * linear_cycle) ) ",
             "offset_y": "((linear_cycle - 0.5) * stride_len)",
-            "offset_z": "p_offset - ( height_offset * sin( _pi * linear_cycle) ) ",
+            "offset_z": "spacing",
             "q1": "0.0",
             "q2": "0.0",
             "q3": "0.0",
-            "qw": "1.0"
+            "qw": "-0.999754"
           }
         ]
       }

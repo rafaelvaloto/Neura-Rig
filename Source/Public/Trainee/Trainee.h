@@ -97,9 +97,38 @@ namespace NR
 			FootValidationPair result;
 			result.err_loss = torch::tensor(0.0f, pred.options());
 
+			auto getInitialQuat = [&](int bindingIdx) -> torch::Tensor {
+				if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size()) {
+					const auto& binding = RigDesc.Bindings[bindingIdx];
+					if (!binding.Rules.empty() && !binding.Rules[0].Phases.empty()) {
+						const auto& phase = binding.Rules[0].Phases[0];
+
+						auto findVal = [&](const std::string& name) -> float {
+							for(const auto& formula : phase.Formulas) {
+								if(formula.Name == name) return std::stof(formula.Expr);
+							}
+							return 0.0f;
+						};
+
+						float q1 = findVal("q1");
+						float q2 = findVal("q2");
+						float q3 = findVal("q3");
+						float qw = findVal("qw");
+						if (qw == 0.0f && q1 == 0.0f && q2 == 0.0f && q3 == 0.0f) qw = 1.0f;
+
+						return torch::tensor({q1, q2, q3, qw}, pred.options());
+					}
+				}
+				return torch::tensor({0.0f, 0.0f, 0.0f, 1.0f}, pred.options());
+			};
+
+
 			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footIKOffset, bool isRightLeg, int thighBindingIdx, int calfBindingIdx) {
-				if (rotationOffsets.size() < 2)
+				if (rotationOffsets.size() < 2 || thighBindingIdx == -1 || calfBindingIdx == -1)
 					return;
+
+				const auto& thighBinding = RigDesc.Bindings[thighBindingIdx];
+				const auto& calfBinding = RigDesc.Bindings[calfBindingIdx];
 
 				auto getQuatRotMat = [&](torch::Tensor q) {
 					q = torch::nn::functional::normalize(q, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
@@ -109,6 +138,26 @@ namespace NR
 						torch::stack({2*x*y + 2*w*z, 1 - 2*x*x - 2*z*z, 2*y*z - 2*w*x}),
 						torch::stack({2*x*z - 2*w*y, 2*y*z + 2*w*x, 1 - 2*x*x - 2*y*y})
 					});
+				};
+
+				auto applyRightLegInversion = [&](torch::Tensor q) {
+					if (!isRightLeg) return q;
+					// O usuario indicou que para o Thigh da perna direita no UE:
+					// X=0.023874, Y=-0.072944, Z=0.996240, W=-0.040190
+					// No JSON original (q1, q2, q3, qw):
+					// q1(x)=0.072944, q2(y)=0.023874, q3(z)=-0.040190, qw=-0.996240
+					
+					// Mapeamento extraido:
+					// newX = q.y  (0.023874)
+					// newY = -q.x (-0.072944)
+					// newZ = -qw  (0.996240)
+					// newW = q.z  (-0.040190)
+					
+					auto x = q[1];
+					auto y = -q[0];
+					auto z = -q[3];
+					auto w = q[2];
+					return torch::stack({x, y, z, w});
 				};
 
 				auto readQuatWithLimit = [&](int64_t offset, int bindingIdx) -> torch::Tensor {
@@ -145,13 +194,17 @@ namespace NR
 					return q;
 				};
 
-				auto qThigh = readQuatWithLimit(rotationOffsets[1], thighBindingIdx);
-				auto qCalf  = readQuatWithLimit(rotationOffsets[0], calfBindingIdx);
+				auto mBaseThigh = getQuatRotMat(applyRightLegInversion(getInitialQuat(thighBindingIdx)));
+				auto mBaseCalf  = getQuatRotMat(applyRightLegInversion(getInitialQuat(calfBindingIdx)));
 
-				float L1 = 0.457520f;
-				float L2 = 0.417055f;
-				float L3 = 0.151158f;
-				float L4 = 0.050000f;
+				auto qThigh = applyRightLegInversion(readQuatWithLimit(rotationOffsets[1], thighBindingIdx));
+				auto qCalf  = applyRightLegInversion(readQuatWithLimit(rotationOffsets[0], calfBindingIdx));
+
+				auto mDeltaThigh = getQuatRotMat(qThigh);
+				auto mDeltaCalf  = getQuatRotMat(qCalf);
+
+				float L1 = target.index({0, torch::indexing::Slice(thighBinding.Offset, thighBinding.Offset + 3)}).norm().item<float>();
+				float L2 = target.index({0, torch::indexing::Slice(calfBinding.Offset, calfBinding.Offset + 3)}).norm().item<float>();
 
 				auto pelvisOffset = pred.index({0, torch::indexing::Slice(0, 3)});
 				auto qPelvis = pred.index({0, torch::indexing::Slice(3, 7)});
@@ -162,20 +215,18 @@ namespace NR
 				result.err_loss = result.err_loss + torch::mse_loss(pelvisOffset, T_pelvisBase) * 1.0f;
 				result.err_loss = result.err_loss + torch::mse_loss(qPelvis, T_qPelvisBase) * 1.0f;
 
-
 				auto hipPos = pelvisOffset;
 				auto mPelvis = getQuatRotMat(qPelvis);
-				// std::cout << "hipPos: " << hipPos << std::endl;
-				// std::cout << "mPelvis: " << mPelvis << std::endl;
-				auto mThigh = torch::mm(mPelvis, getQuatRotMat(qThigh));
-				auto vThigh = torch::tensor({0.0f, 0.0f, -L1}, pred.options()).unsqueeze(1);
+
+				auto mThigh = torch::mm(mPelvis, torch::mm(mBaseThigh, mDeltaThigh));
+				auto vThigh = torch::tensor({L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, vThigh).squeeze(1);
 
-				auto mCalf = torch::mm(mThigh, getQuatRotMat(qCalf));
-				auto vCalf = torch::tensor({0.0f, 0.0f, -L2}, pred.options()).unsqueeze(1);
+				auto mCalf = torch::mm(mThigh, torch::mm(mBaseCalf, mDeltaCalf));
+				auto vCalf = torch::tensor({L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mCalf, vCalf).squeeze(1);
 
-				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos + hipPos));
+				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - hipPos));
 				result.err_loss = result.err_loss + posErrTensor;
 			};
 
