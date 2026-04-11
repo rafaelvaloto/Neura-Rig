@@ -123,6 +123,17 @@ namespace NR
 			};
 
 
+			auto findBindingIdx = [&](const std::string& name) -> int {
+				for (int i = 0; i < (int)RigDesc.Bindings.size(); ++i)
+				{
+					if (RigDesc.Bindings[i].BoneName == name)
+						return i;
+				}
+				return -1;
+			};
+
+			int pelvisBindingIdx = findBindingIdx("pelvis");
+
 			auto computeFoot = [&](const std::vector<int64_t>& rotationOffsets, const torch::Tensor& footIKOffset, bool isRightLeg, int thighBindingIdx, int calfBindingIdx) {
 				if (rotationOffsets.size() < 2 || thighBindingIdx == -1 || calfBindingIdx == -1)
 					return;
@@ -140,37 +151,41 @@ namespace NR
 					});
 				};
 
-				auto applyRightLegInversion = [&](torch::Tensor q) {
+				auto applyRightLegYawOffset = [&](torch::Tensor q) {
 					if (!isRightLeg) return q;
-					// O usuario indicou que para o Thigh da perna direita no UE:
-					// X=0.023874, Y=-0.072944, Z=0.996240, W=-0.040190
-					// No JSON original (q1, q2, q3, qw):
-					// q1(x)=0.072944, q2(y)=0.023874, q3(z)=-0.040190, qw=-0.996240
+					// O usuário indicou que apenas o Yaw (Z) da perna direita precisa do offset de -180.
+					// No Unreal (Control Rig), multiplicar por (Pitch=0, Yaw=-180, Roll=0) rotaciona 180 graus no eixo Z.
+					// Quat de (0,0,-180) em Euler -> (X=0, Y=0, Z=sin(-90), W=cos(-90)) = (0, 0, -1, 0)
 					
-					// Mapeamento extraido:
-					// newX = q.y  (0.023874)
-					// newY = -q.x (-0.072944)
-					// newZ = -qw  (0.996240)
-					// newW = q.z  (-0.040190)
+					auto q_offset = torch::tensor({0.0f, 0.0f, -1.0f, 0.0f}, q.options());
 					
-					auto x = q[1];
-					auto y = -q[0];
-					auto z = -q[3];
-					auto w = q[2];
-					return torch::stack({x, y, z, w});
+					auto w1 = q_offset[3], x1 = q_offset[0], y1 = q_offset[1], z1 = q_offset[2];
+					auto w2 = q[3], x2 = q[0], y2 = q[1], z2 = q[2];
+					
+					auto rw = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
+					auto rx = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
+					auto ry = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
+					auto rz = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
+					
+					return torch::stack({rx, ry, rz, rw});
 				};
 
 				auto readQuatWithLimit = [&](int64_t offset, int bindingIdx) -> torch::Tensor {
 					if (offset + 4 > pred.size(1))
 						return torch::tensor({0.0f, 0.0f, 0.0f, 1.0f}, pred.options());
 
-					auto q = pred.index({0, torch::indexing::Slice(offset, offset + 4)}).clone();
-					q = torch::nn::functional::normalize(q, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
+					auto q_raw = pred.index({0, torch::indexing::Slice(offset, offset + 4)}).clone();
+					auto q = torch::nn::functional::normalize(q_raw, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
 
 					if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size()) {
 						const auto& binding = RigDesc.Bindings[bindingIdx];
 						if (!binding.Rules.empty() && !binding.Rules[0].Limits.IsZero()) {
-							auto x = q[0], y = q[1], z = q[2], w = q[3];
+							// Se for perna direita, aplicamos o offset de Yaw para bater com os limites do JSON (se necessário)
+							// Mas agora que temos bases reais, talvez o offset de -180 não seja mais necessário se a base já o contiver.
+							// Mantenho por segurança se o usuário ainda vir pernas cruzadas.
+							auto q_lim = (isRightLeg && binding.BoneName.find("pelvis") == std::string::npos) ? applyRightLegYawOffset(q) : q;
+							
+							auto x = q_lim[0], y = q_lim[1], z = q_lim[2], w = q_lim[3];
 							auto sinr_cosp = 2 * (w * x + y * z);
 							auto cosr_cosp = 1 - 2 * (x * x + y * y);
 							auto roll = torch::atan2(sinr_cosp, cosr_cosp);
@@ -183,47 +198,61 @@ namespace NR
 							auto yaw = torch::atan2(siny_cosp, cosy_cosp);
 
 							auto euler = torch::stack({roll, pitch, yaw}) * (180.0f / 3.1415926535f);
+							
+							auto normalize_angle = [](torch::Tensor angle) {
+								return torch::atan2(torch::sin(angle * (3.1415926535f / 180.0f)), torch::cos(angle * (3.1415926535f / 180.0f))) * (180.0f / 3.1415926535f);
+							};
+
+							auto roll_norm  = normalize_angle(euler[0]);
+							auto pitch_norm = normalize_angle(euler[1]);
+							auto yaw_val    = normalize_angle(euler[2]);
+
 							const auto& limits = binding.Rules[0].Limits;
+
 							auto minB = torch::tensor({limits.MinX, limits.MinY, limits.MinZ}, q.options());
 							auto maxB = torch::tensor({limits.MaxX, limits.MaxY, limits.MaxZ}, q.options());
 
-							auto diff = torch::clamp(minB - euler, 0.0f).pow(2).sum() + torch::clamp(euler - maxB, 0.0f).pow(2).sum();
+							auto euler_to_check = torch::stack({roll_norm, pitch_norm, yaw_val});
+							
+							auto diff = torch::clamp(minB - euler_to_check, 0.0f).pow(2).sum() + torch::clamp(euler_to_check - maxB, 0.0f).pow(2).sum();
 							result.err_loss = result.err_loss + (diff * 15.0f);
 						}
 					}
 					return q;
 				};
 
-				auto mBaseThigh = getQuatRotMat(applyRightLegInversion(getInitialQuat(thighBindingIdx)));
-				auto mBaseCalf  = getQuatRotMat(applyRightLegInversion(getInitialQuat(calfBindingIdx)));
+				auto mBaseThigh = getQuatRotMat(getInitialQuat(thighBindingIdx));
+				auto mBaseCalf  = getQuatRotMat(getInitialQuat(calfBindingIdx));
 
-				auto qThigh = applyRightLegInversion(readQuatWithLimit(rotationOffsets[1], thighBindingIdx));
-				auto qCalf  = applyRightLegInversion(readQuatWithLimit(rotationOffsets[0], calfBindingIdx));
+				auto qDeltaThigh = readQuatWithLimit(rotationOffsets[1], thighBindingIdx);
+				auto qDeltaCalf  = readQuatWithLimit(rotationOffsets[0], calfBindingIdx);
 
-				auto mDeltaThigh = getQuatRotMat(qThigh);
-				auto mDeltaCalf  = getQuatRotMat(qCalf);
+				auto mDeltaThigh = getQuatRotMat(qDeltaThigh);
+				auto mDeltaCalf  = getQuatRotMat(qDeltaCalf);
 
 				float L1 = target.index({0, torch::indexing::Slice(thighBinding.Offset, thighBinding.Offset + 3)}).norm().item<float>();
 				float L2 = target.index({0, torch::indexing::Slice(calfBinding.Offset, calfBinding.Offset + 3)}).norm().item<float>();
 
 				auto pelvisOffset = pred.index({0, torch::indexing::Slice(0, 3)});
-				auto qPelvis = pred.index({0, torch::indexing::Slice(3, 7)});
+				auto qPelvisDelta = readQuatWithLimit(3, pelvisBindingIdx);
 
-				auto T_pelvisBase = target.index({0, torch::indexing::Slice(0, 3)});
+				auto T_pelvisOffsetBase = target.index({0, torch::indexing::Slice(0, 3)});
 				auto T_qPelvisBase = target.index({0, torch::indexing::Slice(3, 7)});
 
-				result.err_loss = result.err_loss + torch::mse_loss(pelvisOffset, T_pelvisBase) * 1.0f;
-				result.err_loss = result.err_loss + torch::mse_loss(qPelvis, T_qPelvisBase) * 1.0f;
+				result.err_loss = result.err_loss + torch::mse_loss(pelvisOffset, T_pelvisOffsetBase) * 1.0f;
+				
+				auto qPelvisBase = getInitialQuat(pelvisBindingIdx);
+				auto mPelvisBase = getQuatRotMat(qPelvisBase);
+				auto mPelvisDelta = getQuatRotMat(qPelvisDelta);
+				auto mPelvis = torch::mm(mPelvisBase, mPelvisDelta);
 
 				auto hipPos = pelvisOffset;
-				auto mPelvis = getQuatRotMat(qPelvis);
-
 				auto mThigh = torch::mm(mPelvis, torch::mm(mBaseThigh, mDeltaThigh));
-				auto vThigh = torch::tensor({L1, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
+				auto vThigh = torch::tensor({0.0f, 0.0f, L1}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, vThigh).squeeze(1);
 
 				auto mCalf = torch::mm(mThigh, torch::mm(mBaseCalf, mDeltaCalf));
-				auto vCalf = torch::tensor({L2, 0.0f, 0.0f}, pred.options()).unsqueeze(1);
+				auto vCalf = torch::tensor({0.0f, 0.0f, L2}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mCalf, vCalf).squeeze(1);
 
 				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - hipPos));
@@ -232,15 +261,6 @@ namespace NR
 
 			auto P1_offset = pred.index({0, torch::indexing::Slice(7, 10)});
 			auto P2_offset = pred.index({0, torch::indexing::Slice(14, 17)});
-
-			auto findBindingIdx = [&](const std::string& name) -> int {
-				for (int i = 0; i < (int)RigDesc.Bindings.size(); ++i)
-				{
-					if (RigDesc.Bindings[i].BoneName == name)
-						return i;
-				}
-				return -1;
-			};
 
 			computeFoot(rightOffsets, P1_offset, true, findBindingIdx("thigh_r"), findBindingIdx("calf_r"));
 			computeFoot(leftOffsets, P2_offset, false, findBindingIdx("thigh_l"), findBindingIdx("calf_l"));

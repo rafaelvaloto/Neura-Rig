@@ -265,7 +265,7 @@ namespace NR
 		}
 
 		// Suavização EMA para uso em runtime/animação
-		constexpr float emaAlpha = 0.30f;
+		constexpr float emaAlpha = 0.15f;
 		if (!SmoothedOutput.defined() || SmoothedOutput.numel() == 0)
 		{
 			SmoothedOutput = Pred.detach().clone();
