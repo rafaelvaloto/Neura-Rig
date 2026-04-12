@@ -98,10 +98,17 @@ namespace NR
 			result.err_loss = torch::tensor(0.0f, pred.options());
 
 			auto getInitialQuat = [&](int bindingIdx) -> torch::Tensor {
-				if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size()) {
+				if (bindingIdx >= 0 && bindingIdx < (int)RigDesc.Bindings.size()) {
 					const auto& binding = RigDesc.Bindings[bindingIdx];
-					if (!binding.Rules.empty() && !binding.Rules[0].Phases.empty()) {
-						const auto& phase = binding.Rules[0].Phases[0];
+					
+					// Procurar a regra pelo nome definido no binding
+					const auto& rules = binding.Rules;
+					auto it = std::find_if(rules.begin(), rules.end(), [&](const auto& r) {
+						return r.Name == binding.RuleName;
+					});
+
+					if (it != rules.end() && !it->Phases.empty()) {
+						const auto& phase = it->Phases[0];
 
 						auto findVal = [&](const std::string& name) -> float {
 							for(const auto& formula : phase.Formulas) {
@@ -177,15 +184,26 @@ namespace NR
 					auto q_raw = pred.index({0, torch::indexing::Slice(offset, offset + 4)}).clone();
 					auto q = torch::nn::functional::normalize(q_raw, torch::nn::functional::NormalizeFuncOptions().p(2).dim(0));
 
-					if (bindingIdx >= 0 && bindingIdx < RigDesc.Bindings.size()) {
+					if (bindingIdx >= 0 && bindingIdx < (int)RigDesc.Bindings.size()) {
 						const auto& binding = RigDesc.Bindings[bindingIdx];
-						if (!binding.Rules.empty() && !binding.Rules[0].Limits.IsZero()) {
-							// Se for perna direita, aplicamos o offset de Yaw para bater com os limites do JSON (se necessário)
-							// Mas agora que temos bases reais, talvez o offset de -180 não seja mais necessário se a base já o contiver.
-							// Mantenho por segurança se o usuário ainda vir pernas cruzadas.
-							auto q_lim = (isRightLeg && binding.BoneName.find("pelvis") == std::string::npos) ? applyRightLegYawOffset(q) : q;
+						
+						const auto& rules = binding.Rules;
+						auto it = std::find_if(rules.begin(), rules.end(), [&](const auto& r) {
+							return r.Name == binding.RuleName;
+						});
+
+						if (it != rules.end() && !it->Limits.IsZero()) {
+							const auto& limits = it->Limits;
+							auto q_lim = q;
 							
 							auto x = q_lim[0], y = q_lim[1], z = q_lim[2], w = q_lim[3];
+
+							if (isRightLeg) {
+								// Thigh R: Inverter orientação para interpretar limites no eixo Y negativo (Z <-> W)
+								z = q[3]; 
+								w = -q[2];
+							}
+
 							auto sinr_cosp = 2 * (w * x + y * z);
 							auto cosr_cosp = 1 - 2 * (x * x + y * y);
 							auto roll = torch::atan2(sinr_cosp, cosr_cosp);
@@ -197,17 +215,11 @@ namespace NR
 							auto cosy_cosp = 1 - 2 * (y * y + z * z);
 							auto yaw = torch::atan2(siny_cosp, cosy_cosp);
 
-							auto euler = torch::stack({roll, pitch, yaw}) * (180.0f / 3.1415926535f);
-							
-							auto normalize_angle = [](torch::Tensor angle) {
-								return torch::atan2(torch::sin(angle * (3.1415926535f / 180.0f)), torch::cos(angle * (3.1415926535f / 180.0f))) * (180.0f / 3.1415926535f);
-							};
+							auto euler = torch::stack({roll, pitch, yaw}) * (3.1415926535f / 180.0f);
 
-							auto roll_norm  = normalize_angle(euler[0]);
-							auto pitch_norm = normalize_angle(euler[1]);
-							auto yaw_val    = normalize_angle(euler[2]);
-
-							const auto& limits = binding.Rules[0].Limits;
+							auto roll_norm  = euler[0];
+							auto pitch_norm = euler[1];
+							auto yaw_val    = euler[2];
 
 							auto minB = torch::tensor({limits.MinX, limits.MinY, limits.MinZ}, q.options());
 							auto maxB = torch::tensor({limits.MaxX, limits.MaxY, limits.MaxZ}, q.options());
@@ -239,23 +251,30 @@ namespace NR
 				auto T_pelvisOffsetBase = target.index({0, torch::indexing::Slice(0, 3)});
 				auto T_qPelvisBase = target.index({0, torch::indexing::Slice(3, 7)});
 
-				result.err_loss = result.err_loss + torch::mse_loss(pelvisOffset, T_pelvisOffsetBase) * 1.0f;
-				
 				auto qPelvisBase = getInitialQuat(pelvisBindingIdx);
 				auto mPelvisBase = getQuatRotMat(qPelvisBase);
 				auto mPelvisDelta = getQuatRotMat(qPelvisDelta);
 				auto mPelvis = torch::mm(mPelvisBase, mPelvisDelta);
 
-				auto hipPos = pelvisOffset;
+				// Obter o offset lateral da coxa do Target (T_ideal)
+				auto thighLocalOffset = target.index({0, torch::indexing::Slice(thighBinding.Offset, thighBinding.Offset + 3)}).unsqueeze(1);
+				
+				// hipPos deve levar em conta a rotação da bacia aplicada ao offset lateral da coxa
+				auto hipPos = pelvisOffset + torch::mm(mPelvis, thighLocalOffset).squeeze(1);
+
 				auto mThigh = torch::mm(mPelvis, torch::mm(mBaseThigh, mDeltaThigh));
-				auto vThigh = torch::tensor({0.0f, 0.0f, L1}, pred.options()).unsqueeze(1);
+				auto vThigh = torch::tensor({ 0.0f, 0.0f, L1}, pred.options()).unsqueeze(1);
 				auto kneePos = hipPos + torch::mm(mThigh, vThigh).squeeze(1);
 
 				auto mCalf = torch::mm(mThigh, torch::mm(mBaseCalf, mDeltaCalf));
 				auto vCalf = torch::tensor({0.0f, 0.0f, L2}, pred.options()).unsqueeze(1);
 				auto footPos = kneePos + torch::mm(mCalf, vCalf).squeeze(1);
 
-				auto posErrTensor = torch::mse_loss(footIKOffset, (footPos - hipPos));
+				std::cout << "=============0=============" << std::endl;
+				std::cout << "footIKOffset: " << footIKOffset << " Foot: " << footPos << std::endl;
+				std::cout << "=============1=============" << std::endl;
+
+				auto posErrTensor = torch::mse_loss(footIKOffset, footPos);
 				result.err_loss = result.err_loss + posErrTensor;
 			};
 

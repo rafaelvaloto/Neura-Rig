@@ -111,11 +111,13 @@ namespace NR
 	template<FloatingPoint T>
 	IKLossResult Trainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
-		constexpr float wPos = 2.0f;
+		constexpr float wPos = 10.0f;
 		constexpr float wFK = 1.0f;
 		constexpr float wTemporal = 0.35f;
 		constexpr float wAccel = 0.20f;
 		constexpr float wSmoothOut = 0.15f;
+		constexpr float wQuatNorm = 0.85f;
+		constexpr float wPelvisStab = 2.5f;
 
 		const auto options = Pred.options();
 		auto T_ideal = torch::zeros_like(Pred);
@@ -209,6 +211,18 @@ namespace NR
 		auto Pos1Loss = torch::mse_loss(P1_xyz, T1_xyz);
 		auto Pos2Loss = torch::mse_loss(P2_xyz, T2_xyz);
 
+		auto QuatLoss = torch::tensor(0.0f, options);
+		for (const auto& binding : RigDesc.Bindings)
+		{
+			if (binding.Size >= 7)
+			{
+				int64_t qOffset = binding.Offset + 3;
+				auto q = Pred.index({0, torch::indexing::Slice(qOffset, qOffset + 4)});
+				auto norm = torch::norm(q, 2);
+				QuatLoss = QuatLoss + torch::pow(norm - 1.0f, 2);
+			}
+		}
+
 		auto P_FK = ValidateFeetFK(Pred, T_ideal, Offsets_l0, Offsets_l1,true);
 		auto FKLoss = P_FK.err_loss * wFK;
 
@@ -240,6 +254,10 @@ namespace NR
 		// Limites / consistência física
 		auto ConstraintLoss = torch::tensor(0.0f, options);
 
+		// Penalidade para rotação da pelvis (manter próxima da identidade ou do ideal)
+		auto qPelvis = Pred.index({0, torch::indexing::Slice(3, 7)});
+		auto PelvisStabLoss = torch::mse_loss(qPelvis, T_ideal.index({0, torch::indexing::Slice(3, 7)}));
+
 		auto clampPenalty = [&](const torch::Tensor& v, float mn, float mx) {
 			auto low = torch::clamp(mn - v, 0.0f);
 			auto high = torch::clamp(v - mx, 0.0f);
@@ -248,9 +266,11 @@ namespace NR
 
 		auto TotalLoss =
 			BaseLoss +
+			QuatLoss * wQuatNorm +
 			TemporalLoss * wTemporal +
 			AccelLoss * wAccel +
-			SmoothOutLoss * wSmoothOut;
+			SmoothOutLoss * wSmoothOut +
+			PelvisStabLoss * wPelvisStab;
 
 
 		// Atualiza histórico
@@ -282,6 +302,8 @@ namespace NR
 		{
 			std::cout << "Frame: " << frameCounter << std::endl;
 			std::cout << "BaseLoss: " << BaseLoss.item<float>() << std::endl;
+			std::cout << "QuatNormLoss: " << QuatLoss.item<float>() << std::endl;
+			std::cout << "PelvisStabLoss: " << PelvisStabLoss.item<float>() << std::endl;
 			std::cout << "TemporalLoss: " << TemporalLoss.item<float>() << std::endl;
 			std::cout << "AccelLoss: " << AccelLoss.item<float>() << std::endl;
 			std::cout << "TotalLoss: " << TotalLoss.item<float>() << std::endl;
