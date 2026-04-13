@@ -111,13 +111,12 @@ namespace NR
 	template<FloatingPoint T>
 	IKLossResult Trainee<T>::ComputeRLReward(const torch::Tensor& InputTensor, const torch::Tensor& Pred)
 	{
-		constexpr float wPos = 10.0f;
-		constexpr float wFK = 1.0f;
+		constexpr float wPos = 3.0f;
+		constexpr float wFK = 2.5f;
 		constexpr float wTemporal = 0.35f;
 		constexpr float wAccel = 0.20f;
 		constexpr float wSmoothOut = 0.15f;
 		constexpr float wQuatNorm = 0.85f;
-		constexpr float wPelvisStab = 2.5f;
 
 		const auto options = Pred.options();
 		auto T_ideal = torch::zeros_like(Pred);
@@ -192,15 +191,6 @@ namespace NR
 		Offsets_l0.reserve(2);
 		Offsets_l1.reserve(2);
 
-		for (size_t i = 0; i < B_size; ++i)
-		{
-			auto& Bindings = RigDesc.Bindings[i];
-			if (Bindings.BoneName == "thigh_r" || Bindings.BoneName == "calf_r")
-				Offsets_l0.push_back(Bindings.Offset);
-			else if (Bindings.BoneName == "thigh_l" || Bindings.BoneName == "calf_l")
-				Offsets_l1.push_back(Bindings.Offset);
-		}
-
 		// Loss base
 		auto P1_xyz = Pred.index({0, torch::indexing::Slice(7, 10)});
 		auto T1_xyz = T_ideal.index({0, torch::indexing::Slice(7, 10)});
@@ -223,7 +213,7 @@ namespace NR
 			}
 		}
 
-		auto P_FK = ValidateFeetFK(Pred, T_ideal, Offsets_l0, Offsets_l1,true);
+		auto P_FK = ValidateFeetFK(Pred, T_ideal, InputTensor);
 		auto FKLoss = P_FK.err_loss * wFK;
 
 		auto BaseLoss = ((Pos1Loss + Pos2Loss) * wPos) + FKLoss;
@@ -254,10 +244,6 @@ namespace NR
 		// Limites / consistência física
 		auto ConstraintLoss = torch::tensor(0.0f, options);
 
-		// Penalidade para rotação da pelvis (manter próxima da identidade ou do ideal)
-		auto qPelvis = Pred.index({0, torch::indexing::Slice(3, 7)});
-		auto PelvisStabLoss = torch::mse_loss(qPelvis, T_ideal.index({0, torch::indexing::Slice(3, 7)}));
-
 		auto clampPenalty = [&](const torch::Tensor& v, float mn, float mx) {
 			auto low = torch::clamp(mn - v, 0.0f);
 			auto high = torch::clamp(v - mx, 0.0f);
@@ -269,8 +255,7 @@ namespace NR
 			QuatLoss * wQuatNorm +
 			TemporalLoss * wTemporal +
 			AccelLoss * wAccel +
-			SmoothOutLoss * wSmoothOut +
-			PelvisStabLoss * wPelvisStab;
+			SmoothOutLoss * wSmoothOut;
 
 
 		// Atualiza histórico
@@ -298,16 +283,16 @@ namespace NR
 		Predicated = Pred;
 		IdealTargets = T_ideal;
 
-		if (frameCounter++ % 30 == 0)
-		{
-			std::cout << "Frame: " << frameCounter << std::endl;
-			std::cout << "BaseLoss: " << BaseLoss.item<float>() << std::endl;
-			std::cout << "QuatNormLoss: " << QuatLoss.item<float>() << std::endl;
-			std::cout << "PelvisStabLoss: " << PelvisStabLoss.item<float>() << std::endl;
-			std::cout << "TemporalLoss: " << TemporalLoss.item<float>() << std::endl;
-			std::cout << "AccelLoss: " << AccelLoss.item<float>() << std::endl;
-			std::cout << "TotalLoss: " << TotalLoss.item<float>() << std::endl;
-		}
+		// if (frameCounter++ % 30 == 0)
+		// {
+		// 	std::cout << "Frame: " << frameCounter << std::endl;
+		// 	std::cout << "BaseLoss: " << BaseLoss.item<float>() << std::endl;
+		// 	std::cout << "QuatNormLoss: " << QuatLoss.item<float>() << std::endl;
+		// 	std::cout << "PelvisStabLoss: " << PelvisStabLoss.item<float>() << std::endl;
+		// 	std::cout << "TemporalLoss: " << TemporalLoss.item<float>() << std::endl;
+		// 	std::cout << "AccelLoss: " << AccelLoss.item<float>() << std::endl;
+		// 	std::cout << "TotalLoss: " << TotalLoss.item<float>() << std::endl;
+		// }
 
 		return IKLossResult(TotalLoss);
 	}
