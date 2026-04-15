@@ -28,5 +28,9 @@ namespace NR
 		 * @return true if successful, false otherwise
 		 */
 		static bool LoadProfileFromJson(const std::string& FilePath, NRModelProfile& OutProfile);
+
+		static bool LoadIKFromJson(const std::string& FilePath, NRModelProfile& OutProfile);
+		static bool LoadSKFromJson(const std::string& FilePath, NRSkeleton& OutSkeleton);
+		static bool LoadTWFromJson(const std::string& FilePath, NRTrainingWeights& OutWeights);
 	};
 } // namespace NR

@@ -157,7 +157,16 @@ namespace NR
 	struct IKLossResult
 	{
 		torch::Tensor TotalLoss;
+		torch::Tensor PositionLoss;
+		torch::Tensor KinematicsLoss;
+		torch::Tensor TemporalLoss;
+		torch::Tensor AccelerationLoss;
+		torch::Tensor SmoothOutputLoss;
+		torch::Tensor QuaternionNormLoss;
+		torch::Tensor FootTargetLoss;
+		torch::Tensor RotationLoss;
 
+		IKLossResult() = default;
 		IKLossResult(torch::Tensor Total)
 			: TotalLoss(std::move(Total)) {}
 	};
@@ -189,11 +198,6 @@ namespace NR
 
 	struct NRRule
 	{
-		std::string Name;
-		std::map<std::string, double> Constants;
-		std::vector<NRVars> Variables;
-		std::vector<NRLogic> Logic;
-
 		struct RotationLimit
 		{
 			float MinX = -360.0f;
@@ -207,6 +211,11 @@ namespace NR
 				return MinX == 0.0f && MaxX == 0.0f && MinY == 0.0f && MaxY == 0.0f && MinZ == 0.0f && MaxZ == 0.0f;
 			}
 		};
+
+		std::string Name;
+		std::map<std::string, double> Constants;
+		std::vector<NRVars> Variables;
+		std::vector<NRLogic> Logic;
 		RotationLimit Limits;
 
 		struct Phase
@@ -217,6 +226,52 @@ namespace NR
 		};
 
 		std::vector<Phase> Phases;
+	};
+
+	struct NRSkeleton
+	{
+		struct Bone
+		{
+			std::string Name;
+			int32_t Size = 0;
+			int32_t Offset = 0;
+			struct Pose
+			{
+				float x = 0, y = 0, z = 0;
+				float q1 = 0, q2 = 0, q3 = 0, qw = 1;
+			} RestPose;
+			NRRule::RotationLimit Limits;
+			std::vector<int32_t> ChildrenIndices;
+		};
+
+		Bone Parent;
+		std::vector<std::vector<Bone>> Rest; // Cadeias de ossos
+	};
+
+	struct NRWeight
+	{
+		float Weight = 0.1f;
+		std::string Description;
+	};
+
+	struct NRTrainingWeights
+	{
+		struct HyperParams
+		{
+			float LearningRate = 0.0001f;
+			float EmaAlpha = 0.15f;
+			int32_t MaxCandidates = 5;
+		} HyperParameters;
+
+		std::unordered_map<std::string, NRWeight> LossWeights;
+
+		struct BoneBias
+		{
+			std::string Name;
+			float PositionMultiplier = 0.1f;
+			float RotationMultiplier = 0.1f;
+		};
+		std::vector<BoneBias> BoneSpecificBias;
 	};
 
 	struct NRBinding
@@ -235,14 +290,17 @@ namespace NR
 		std::vector<NRDataBlock> Inputs;
 		std::vector<NRDataBlock> Outputs;
 
-		void AddInput(const std::string& name, int32_t size)
+		NRSkeleton Skeleton;
+		NRTrainingWeights TrainingWeights;
+
+		void AddInput(const std::string& name, int32_t size, int32_t offset)
 		{
-			Inputs.push_back({name, size, false});
+			Inputs.push_back({name, offset, size});
 		}
 
-		void AddOutput(const std::string& name, int32_t size)
+		void AddOutput(const std::string& name, int32_t size, int32_t offset)
 		{
-			Outputs.push_back({name, size, true});
+			Outputs.push_back({name, offset, size});
 		}
 
 		[[nodiscard]] NRRule FindRule(const std::string& name, int index) const

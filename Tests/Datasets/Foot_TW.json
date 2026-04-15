@@ -1,0 +1,85 @@
+﻿{
+  "Profile": "Foot_TW",
+  "Version": 1,
+  "Schema": {
+    "HyperParameters": {
+      "LearningRate": 0.0001,
+      "EmaAlpha": 0.20,
+      "MaxCandidates": 10
+    },
+    "LossWeights": {
+      "Objective": {
+        "Weight": 10.0,
+        "Description": "wPos: Distance error between the predicted bone and the ideal IK target foot - Objective."
+      },
+      "Position": {
+        "Weight": 1.0,
+        "Description": "wPos: Distance error between the predicted bone and the ideal IK target."
+      },
+      "Kinematics": {
+        "Weight": 1.0,
+        "Description": "wFK: Forward Kinematics error to maintain skeletal hierarchy and bone length integrity."
+      },
+      "Temporal": {
+        "Weight": 0.35,
+        "Description": "wTemporal: Coherence between the current frame and the previous frame to prevent jitter."
+      },
+      "Acceleration": {
+        "Weight": 0.20,
+        "Description": "wAccel: Penalizes sudden changes in velocity for physical smoothness."
+      },
+      "SmoothOutput": {
+        "Weight": 0.15,
+        "Description": "wSmoothOut: Delta between the raw neural prediction and the EMA-smoothed output."
+      },
+      "QuaternionNorm": {
+        "Weight": 0.85,
+        "Description": "wQuatNorm: Forces q1, q2, q3, qw values to maintain unit magnitude (1.0)."
+      }
+    },
+    "BoneSpecificBias": [
+      {
+        "Name": "pelvis",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher rotation bias to keep the X-up orientation stable."
+      },
+      {
+        "Name": "thigh_r",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      },
+      {
+        "Name": "thigh_l",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      },
+      {
+        "Name": "calf_r",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      },
+      {
+        "Name": "calf_l",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      },
+      {
+        "Name": "foot_r",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      },
+      {
+        "Name": "foot_l",
+        "PositionMultiplier": 0.5,
+        "RotationMultiplier": 1.0,
+        "Comment": "Higher position bias for precise floor contact."
+      }
+    ]
+  }
+}

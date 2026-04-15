@@ -31,14 +31,9 @@ class NRMultiHeadModel : public NR::IModel<float>
 {
 public:
 	torch::nn::Sequential backbone{nullptr};
-	torch::nn::Linear head_foot_r{nullptr};
-	torch::nn::Linear head_foot_l{nullptr};
-	torch::nn::Linear head_bal_r{nullptr};
-	torch::nn::Linear head_bal_l{nullptr};
 	torch::nn::Linear head_leg_r{nullptr};
 	torch::nn::Linear head_leg_l{nullptr};
 	torch::nn::Linear head_pelvis_ik{nullptr};
-	torch::nn::Linear head_spine_ik{nullptr};
 
 	NRMultiHeadModel(int64_t in_size, int64_t hidden, int64_t /*out_size*/)
 	{
@@ -51,24 +46,23 @@ public:
 			                           ));
 
 		head_pelvis_ik = register_module("head_pelvis_ik", torch::nn::Linear(hidden, 7));
-		head_foot_r = register_module("head_foot_r", torch::nn::Linear(hidden, 7));
-		head_foot_l = register_module("head_foot_l", torch::nn::Linear(hidden, 7));
-		head_leg_r = register_module("head_leg_r", torch::nn::Linear(hidden, 14));
-		head_leg_l = register_module("head_leg_l", torch::nn::Linear(hidden, 14));
+		head_leg_r = register_module("head_leg_r", torch::nn::Linear(hidden, 21));
+		head_leg_l = register_module("head_leg_l", torch::nn::Linear(hidden, 21));
 	}
 
 	torch::Tensor Forward(torch::Tensor x) override
 	{
 		auto feat = backbone->forward(x);
 		auto h_pelvis = head_pelvis_ik->forward(feat);
-		auto h_foot_r = head_foot_r->forward(feat);
-		auto h_foot_l = head_foot_l->forward(feat);
 		auto h_leg_r = head_leg_r->forward(feat);
 		auto h_leg_l = head_leg_l->forward(feat);
 
-		// Outputs: pelvis_ik (7), foot_ik (14), legs_ik (28)
-		// Total: 7 + 14 + 28 = 49
-		return torch::cat({h_pelvis, h_foot_r, h_foot_l, h_leg_r, h_leg_l}, 1);
+		// Apply tanh to keep translations within reasonable bounds if needed,
+		// but typically we want raw values for IK.
+		// For orientations (Quaternions), we might want to normalize later.
+
+		// Outputs: pelvis_ik (7), legs_ik_r (21), legs_ik_l (21)
+		return torch::cat({h_pelvis, h_leg_r, h_leg_l}, 1);
 	}
 
 	void SaveModel(const std::string& FilePath) override
@@ -100,16 +94,36 @@ int main()
 	Rules activeRules;
 	std::shared_ptr<Solver> solver = nullptr;
 
-	std::string DataAssetPath = "Tests/Datasets/Foot_IK.json";
-	if (!std::filesystem::exists(DataAssetPath))
-	{
-		DataAssetPath = "../Tests/Datasets/Foot_IK.json"; // Fallback for some build configurations
-	}
-	DataAssetPath = std::filesystem::absolute(DataAssetPath).string();
+	std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
+	std::string DataAssetPath_SK = "Tests/Datasets/Foot_SK.json";
+	std::string DataAssetPath_TW = "Tests/Datasets/Foot_TW.json";
 
-	if (!Parse::LoadProfileFromJson(DataAssetPath, activeProfile))
+	if (!std::filesystem::exists(DataAssetPath_IK))
 	{
-		std::cerr << "Failed to load data asset: " << DataAssetPath << std::endl;
+		DataAssetPath_IK = "../Tests/Datasets/Foot_IK.json";
+		DataAssetPath_SK = "../Tests/Datasets/Foot_SK.json";
+		DataAssetPath_TW = "../Tests/Datasets/Foot_TW.json";
+	}
+
+	DataAssetPath_IK = std::filesystem::absolute(DataAssetPath_IK).string();
+	DataAssetPath_SK = std::filesystem::absolute(DataAssetPath_SK).string();
+	DataAssetPath_TW = std::filesystem::absolute(DataAssetPath_TW).string();
+
+	if (!Parse::LoadIKFromJson(DataAssetPath_IK, activeProfile))
+	{
+		std::cerr << "Failed to load IK asset: " << DataAssetPath_IK << std::endl;
+		return 1;
+	}
+
+	if (!Parse::LoadSKFromJson(DataAssetPath_SK, activeProfile.Skeleton))
+	{
+		std::cerr << "Failed to load SK asset: " << DataAssetPath_SK << std::endl;
+		return 1;
+	}
+
+	if (!Parse::LoadTWFromJson(DataAssetPath_TW, activeProfile.TrainingWeights))
+	{
+		std::cerr << "Failed to load TW asset: " << DataAssetPath_TW << std::endl;
 		return 1;
 	}
 
