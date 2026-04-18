@@ -1,5 +1,5 @@
 ﻿{
-  "Profile": "Foot_IK",
+  "Profile": "Rest_Pose_IK",
   "Version": 1,
   "Schema": {
     "Inputs": [
@@ -23,14 +23,17 @@
       { "Name": "bone_l3_1_hit",      "Space": "-",  "Type": "float", "Size": 1, "Offset": 13 },
       { "Name": "bone_l3_1_offset",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 14 },
       { "Name": "bone_l3_1_spacing",  "Space": "-",  "Type": "float", "Size": 1, "Offset": 15 },
+      { "Name": "bone_l0_x",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 16 },
+      { "Name": "bone_l0_y",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 17 },
+      { "Name": "bone_l0_z",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 18 },
 
-      { "Name": "t_cycle",      "Space": "-",  "Type": "float", "Size": 1, "Offset": 16 },
-      { "Name": "t_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 17 },
-      { "Name": "reserved",     "Space": "-",  "Type": "float", "Size": 1, "Offset": 18 }
+      { "Name": "t_cycle",      "Space": "-",  "Type": "float", "Size": 1, "Offset": 19 },
+      { "Name": "t_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 20 },
+      { "Name": "reserved",     "Space": "-",  "Type": "float", "Size": 1, "Offset": 21 }
     ],
     "Bindings": [
-      { "Name": "foot_r", "Target": "Humanoid_Foot_Ik_Target", "Size": 7, "Offset": 21 },
-      { "Name": "foot_l", "Target": "Humanoid_Foot_Ik_Target", "Size": 7, "Offset": 42 }
+      { "Name": "foot_r", "Target": "Humanoid_Rest_Pose_R_Ik_Target", "Size": 7, "Offset": 21 },
+      { "Name": "foot_l", "Target": "Humanoid_Rest_Pose_L_Ik_Target", "Size": 7, "Offset": 42 }
     ],
     "Parameters": {
       "Constants": {
@@ -39,6 +42,9 @@
         "step_height": 0.30
       },
       "Variables": {
+        "bone_l0_ws_x" : ["bone_l0_x", "bone_l0_x"],
+        "bone_l0_ws_y" : ["bone_l0_y", "bone_l0_y"],
+        "bone_l0_ws_z" : ["bone_l0_z", "bone_l0_z"],
         "bone_l0" : ["bone_l0", "bone_l0"],
         "bone_l1" : ["bone_l1_0", "bone_l1_1"],
         "bone_l2" : ["bone_l2_0", "bone_l2_1"],
@@ -53,30 +59,32 @@
     },
     "Rules": [
       {
-        "Name": "Humanoid_Foot_Ik_Target",
+        "Name": "Humanoid_Rest_Pose_R_Ik_Target",
         "Logic": {
-          "f_offset": "(bone_l1 + bone_l2)",
-          "stride_len": "k * f_offset * sqrt(velocity / f_offset)",
-          "stride_freq": "velocity / stride_len",
-          "T_gait": "(1.0 / stride_freq) * gait_scale",
-          "phase_offset": "fmod((t_cycle / T_gait) + offset, 1.0)",
-          "linear_cycle": "2.0 * phase_offset - 1.0",
-          "height_offset": "step_height"
+          "f_offset": "bone_l2 + bone_l1"
         },
         "Phases": [
           {
-            "id": "stance",
-            "condition": "linear_cycle < 0.0",
-            "offset_x": "(-f_offset)",
-            "offset_y": "-((linear_cycle + 0.5) * stride_len)",
-            "offset_z": "0.0"
-          },
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "f_offset",
+            "offset_y": "0.10",
+            "offset_z": "0.05"
+          }
+        ]
+      },
+      {
+        "Name": "Humanoid_Rest_Pose_L_Ik_Target",
+        "Logic": {
+          "f_offset": "bone_l2 + bone_l1"
+        },
+        "Phases": [
           {
-            "id": "swing",
-            "condition": "linear_cycle >= 0.0",
-            "offset_x": "(-f_offset) + ( height_offset * sin( _pi * linear_cycle) )",
-            "offset_y": "((linear_cycle - 0.5) * stride_len)",
-            "offset_z": "0.0"
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "-f_offset",
+            "offset_y": "-0.10",
+            "offset_z": "-0.05"
           }
         ]
       }

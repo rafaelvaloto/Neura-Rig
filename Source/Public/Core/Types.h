@@ -149,6 +149,47 @@ namespace NR
 		return deg * 3.14159265358979323846f / 180.0f;
 	}
 
+	struct Quat
+	{
+		float x, y, z, w;
+
+		static Quat FromEulerXYZ(float x, float y, float z)
+		{
+			float cx = std::cos(x * 0.5f);
+			float sx = std::sin(x * 0.5f);
+			float cy = std::cos(y * 0.5f);
+			float sy = std::sin(y * 0.5f);
+			float cz = std::cos(z * 0.5f);
+			float sz = std::sin(z * 0.5f);
+
+			Quat q;
+			q.w = cx * cy * cz + sx * sy * sz;
+			q.x = sx * cy * cz - cx * sy * sz;
+			q.y = cx * sy * cz + sx * cy * sz;
+			q.z = cx * cy * sz - sx * sy * cz;
+			return q;
+		}
+
+		// Unreal Engine: FRotator(Pitch, Yaw, Roll) → q = q_Yaw(Z) * q_Pitch(Y) * q_Roll(X)
+		static Quat FromUnrealRotator(float pitch, float yaw, float roll)
+		{
+			float cr = std::cos(roll  * 0.5f);
+			float sr = std::sin(roll  * 0.5f);
+			float cp = std::cos(pitch * 0.5f);
+			float sp = std::sin(pitch * 0.5f);
+			float cy = std::cos(yaw   * 0.5f);
+			float sy = std::sin(yaw   * 0.5f);
+
+			// q = q_Yaw * q_Pitch * q_Roll
+			Quat q;
+			q.w =  cy * cp * cr + sy * sp * sr;
+			q.x =  cy * cp * sr - sy * sp * cr;
+			q.y =  cy * sp * cr + sy * cp * sr;
+			q.z =  sy * cp * cr - cy * sp * sr;
+			return q;
+		}
+	};
+
 	struct FootValidationPair
 	{
 		torch::Tensor err_loss;

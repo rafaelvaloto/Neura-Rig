@@ -93,10 +93,9 @@ namespace NR
 		 * @brief Performs Forward Kinematics to validate the skeleton hierarchy and bone lengths.
 		 * @param Pred Neural network prediction
 		 * @param Target Original network input (used to extract IK targets)
-		 * @param[out] TargetLoss Calculated loss for foot target discrepancy
 		 * @return Tensor containing FK error (bone chain integrity)
 		 */
-		torch::Tensor ComputeFK(const torch::Tensor& Pred, const torch::Tensor& Target, torch::Tensor& TargetLoss);
+		torch::Tensor ComputeFK(const torch::Tensor& Pred, const torch::Tensor& Target);
 
 		// ... existing code ...
 		void Reset();

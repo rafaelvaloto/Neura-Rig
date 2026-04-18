@@ -94,13 +94,15 @@ int main()
 	Rules activeRules;
 	std::shared_ptr<Solver> solver = nullptr;
 
-	std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
+	// std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
+	std::string DataAssetPath_IK = "Tests/Datasets/Rest_Pose_IK.json";
 	std::string DataAssetPath_SK = "Tests/Datasets/Foot_SK.json";
 	std::string DataAssetPath_TW = "Tests/Datasets/Foot_TW.json";
 
 	if (!std::filesystem::exists(DataAssetPath_IK))
 	{
-		DataAssetPath_IK = "../Tests/Datasets/Foot_IK.json";
+		//DataAssetPath_IK = "../Tests/Datasets/Foot_IK.json";
+		DataAssetPath_IK = "../Tests/Datasets/Rest_Pose_IK.json";
 		DataAssetPath_SK = "../Tests/Datasets/Foot_SK.json";
 		DataAssetPath_TW = "../Tests/Datasets/Foot_TW.json";
 	}
@@ -224,7 +226,7 @@ int main()
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 1.0f)
+					if (!solver && loss < 2.0f)
 					{
 						solver = std::make_shared<Solver>(model, activeProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;

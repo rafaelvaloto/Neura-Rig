@@ -220,13 +220,28 @@ namespace NR
 				};
 				if (b.contains("Pose")) {
 					auto& p = b["Pose"];
-					bone.RestPose.x = getFloat(p, "x");
-					bone.RestPose.y = getFloat(p, "y");
-					bone.RestPose.z = getFloat(p, "z");
-					bone.RestPose.q1 = getFloat(p, "q1");
-					bone.RestPose.q2 = getFloat(p, "q2");
-					bone.RestPose.q3 = getFloat(p, "q3");
-					bone.RestPose.qw = getFloat(p, "qw");
+					bone.RestPose.x = getFloat(p, "x") * 0.01;
+					bone.RestPose.y = getFloat(p, "y") * 0.01;
+					bone.RestPose.z = getFloat(p, "z") * 0.01;
+
+					if (p.contains("Pitch") || p.contains("Yaw") || p.contains("Roll")) {
+						float pitch = DegToRad(getFloat(p, "Pitch"));
+						float yaw   = DegToRad(getFloat(p, "Yaw"));
+						float roll  = DegToRad(getFloat(p, "Roll"));
+						Quat q = Quat::FromUnrealRotator(pitch, yaw, roll);
+						bone.RestPose.q1 = q.x;
+						bone.RestPose.q2 = q.y;
+						bone.RestPose.q3 = q.z;
+						bone.RestPose.qw = q.w;
+
+						std::cout << "Quat: " << pitch << ", " << yaw << ", " << roll << std::endl;
+						std::cout << "Quat: " << q.x << ", " << q.y << ", " << q.z << ", " << q.w << std::endl;
+					} else {
+						bone.RestPose.q1 = getFloat(p, "q1");
+						bone.RestPose.q2 = getFloat(p, "q2");
+						bone.RestPose.q3 = getFloat(p, "q3");
+						bone.RestPose.qw = getFloat(p, "qw");
+					}
 				}
 				if (b.contains("Limits")) {
 					auto& lim = b["Limits"];

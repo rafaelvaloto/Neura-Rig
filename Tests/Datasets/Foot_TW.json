@@ -3,21 +3,21 @@
   "Version": 1,
   "Schema": {
     "HyperParameters": {
-      "LearningRate": 0.0001,
-      "EmaAlpha": 0.20,
-      "MaxCandidates": 10
+      "LearningRate": 0.00001,
+      "EmaAlpha": 0.15,
+      "MaxCandidates": 2
     },
     "LossWeights": {
       "Objective": {
-        "Weight": 10.0,
+        "Weight": 15.0,
         "Description": "wPos: Distance error between the predicted bone and the ideal IK target foot - Objective."
       },
       "Position": {
-        "Weight": 1.0,
+        "Weight": 15.0,
         "Description": "wPos: Distance error between the predicted bone and the ideal IK target."
       },
       "Kinematics": {
-        "Weight": 1.0,
+        "Weight": 15.0,
         "Description": "wFK: Forward Kinematics error to maintain skeletal hierarchy and bone length integrity."
       },
       "Temporal": {
@@ -40,8 +40,8 @@
     "BoneSpecificBias": [
       {
         "Name": "pelvis",
-        "PositionMultiplier": 0.5,
-        "RotationMultiplier": 1.0,
+        "PositionMultiplier": 1.0,
+        "RotationMultiplier": 5.0,
         "Comment": "Higher rotation bias to keep the X-up orientation stable."
       },
       {
