@@ -26,12 +26,17 @@
       { "Name": "bone_l0_x",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 16 },
       { "Name": "bone_l0_y",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 17 },
       { "Name": "bone_l0_z",          "Space": "WS", "Type": "float", "Size": 1, "Offset": 18 },
+      { "Name": "bone_l0_q1",         "Space": "WS", "Type": "float", "Size": 1, "Offset": 19 },
+      { "Name": "bone_l0_q2",         "Space": "WS", "Type": "float", "Size": 1, "Offset": 20 },
+      { "Name": "bone_l0_q3",         "Space": "WS", "Type": "float", "Size": 1, "Offset": 21 },
+      { "Name": "bone_l0_qw",         "Space": "WS", "Type": "float", "Size": 1, "Offset": 22 },
 
-      { "Name": "t_cycle",      "Space": "-",  "Type": "float", "Size": 1, "Offset": 19 },
-      { "Name": "t_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 20 },
-      { "Name": "reserved",     "Space": "-",  "Type": "float", "Size": 1, "Offset": 21 }
+      { "Name": "t_cycle",      "Space": "-",  "Type": "float", "Size": 1, "Offset": 23 },
+      { "Name": "t_dilation",   "Space": "-",  "Type": "float", "Size": 1, "Offset": 24 },
+      { "Name": "reserved",     "Space": "-",  "Type": "float", "Size": 1, "Offset": 25 }
     ],
     "Bindings": [
+      { "Name": "pelvis", "Target": "Humanoid_Rest_Pose_Pelvis_Target", "Size": 7, "Offset": 0 },
       { "Name": "foot_r", "Target": "Humanoid_Rest_Pose_R_Ik_Target", "Size": 7, "Offset": 21 },
       { "Name": "foot_l", "Target": "Humanoid_Rest_Pose_L_Ik_Target", "Size": 7, "Offset": 42 }
     ],
@@ -42,49 +47,63 @@
         "step_height": 0.30
       },
       "Variables": {
+        "bone_l2" : ["bone_l2_0", "bone_l2_1"],
         "bone_l0_ws_x" : ["bone_l0_x", "bone_l0_x"],
         "bone_l0_ws_y" : ["bone_l0_y", "bone_l0_y"],
         "bone_l0_ws_z" : ["bone_l0_z", "bone_l0_z"],
-        "bone_l0" : ["bone_l0", "bone_l0"],
-        "bone_l1" : ["bone_l1_0", "bone_l1_1"],
-        "bone_l2" : ["bone_l2_0", "bone_l2_1"],
-        "bone_l3" : ["bone_l3_0", "bone_l3_1"],
-        "bone_l4" : ["bone_l4_0", "bone_l4_1"],
-        "is_hit"  : ["bone_l3_0_hit", "bone_l3_1_hit"],
-        "offset"  : ["bone_l3_0_offset", "bone_l3_1_offset"],
-        "spacing" : ["bone_l3_0_spacing", "bone_l3_1_spacing"],
-        "velocity": ["velocity", "velocity"],
-        "t_cycle" : ["t_cycle", "t_cycle"]
+        "bone_l0_ws_q1" : ["bone_l0_q1", "bone_l0_q1"],
+        "bone_l0_ws_q2" : ["bone_l0_q2", "bone_l0_q2"],
+        "bone_l0_ws_q3" : ["bone_l0_q3", "bone_l0_q3"],
+        "bone_l0_ws_qw" : ["bone_l0_qw", "bone_l0_qw"]
       }
     },
     "Rules": [
       {
-        "Name": "Humanoid_Rest_Pose_R_Ik_Target",
+        "Name": "Humanoid_Rest_Pose_Pelvis_Target",
         "Logic": {
-          "f_offset": "bone_l2 + bone_l1"
+          "p_Offset": "0.0"
         },
         "Phases": [
           {
             "id": "global",
             "condition": "1.0",
-            "offset_x": "f_offset",
-            "offset_y": "0.10",
-            "offset_z": "0.05"
+            "offset_x": "bone_l0_ws_x",
+            "offset_y": "bone_l0_ws_y",
+            "offset_z": "bone_l0_ws_z",
+            "q1": "bone_l0_ws_q1",
+            "q2": "bone_l0_ws_q2",
+            "q3": "bone_l0_ws_q3",
+            "qw": "bone_l0_ws_qw"
           }
         ]
       },
       {
-        "Name": "Humanoid_Rest_Pose_L_Ik_Target",
+        "Name": "Humanoid_Rest_Pose_R_Ik_Target",
         "Logic": {
-          "f_offset": "bone_l2 + bone_l1"
+          "f_offset": "bone_l2"
         },
         "Phases": [
           {
             "id": "global",
             "condition": "1.0",
             "offset_x": "-f_offset",
-            "offset_y": "-0.10",
-            "offset_z": "-0.05"
+            "offset_y": "0.05",
+            "offset_z": "0.10"
+          }
+        ]
+      },
+      {
+        "Name": "Humanoid_Rest_Pose_L_Ik_Target",
+        "Logic": {
+          "f_offset": "bone_l2"
+        },
+        "Phases": [
+          {
+            "id": "global",
+            "condition": "1.0",
+            "offset_x": "f_offset",
+            "offset_y": "0.15",
+            "offset_z": "0.10"
           }
         ]
       }
