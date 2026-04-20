@@ -147,12 +147,19 @@ namespace NR
 								if (it->contains("Limits"))
 								{
 									auto& lim = it->at("Limits");
-									rule.Limits.MinX = lim.value("MinX", -360.0f);
-									rule.Limits.MaxX = lim.value("MaxX", 360.0f);
-									rule.Limits.MinY = lim.value("MinY", -360.0f);
-									rule.Limits.MaxY = lim.value("MaxY", 360.0f);
-									rule.Limits.MinZ = lim.value("MinZ", -360.0f);
-									rule.Limits.MaxZ = lim.value("MaxZ", 360.0f);
+
+									RotationLimit limits;
+									limits.Min = torch::tensor({
+										DegToRad(lim.value("MinX", -360.0f)),
+										DegToRad(lim.value("MinY", -360.0f)),
+										DegToRad(lim.value("MinZ", -360.0f))
+									});
+									limits.Max = torch::tensor({
+										DegToRad(lim.value("MaxX", 360.0f)),
+										DegToRad(lim.value("MaxY", 360.0f)),
+										DegToRad(lim.value("MaxZ", 360.0f))
+									});
+									rule.Limits = limits;
 								}
 
 								if (it->contains("Phases"))
@@ -192,7 +199,7 @@ namespace NR
 		}
 	}
 
-	bool Parse::LoadSKFromJson(const std::string& FilePath, NRSkeleton& OutSkeleton)
+	bool Parse::LoadSKFromJson(const std::string& FilePath, NRSkeleton& OutSkeleton, IQuat* OutQuat)
 	{
 		std::ifstream file(FilePath);
 		if (!file.is_open()) return false;
@@ -204,11 +211,18 @@ namespace NR
 			if (!j.contains("Schema")) return false;
 			auto schema = j["Schema"];
 
-			auto parseBone = [](const json& b) {
+			auto parseBone = [&](const json& b) {
 				NRSkeleton::Bone bone;
 				bone.Name = b.value("Name", "");
 				bone.Size = b.value("Size", 0);
 				bone.Offset = b.value("Offset", 0);
+				
+				// Initialize default tensors to avoid "None" tensor errors
+				bone.RestPose.Pos = torch::zeros({3}, torch::kFloat32);
+				bone.RestPose.Rot = torch::tensor({0.0f, 0.0f, 0.0f, 1.0f}, torch::kFloat32);
+				bone.Limits.Min = torch::tensor({-3.14159f, -3.14159f, -3.14159f}, torch::kFloat32);
+				bone.Limits.Max = torch::tensor({3.14159f, 3.14159f, 3.14159f}, torch::kFloat32);
+
 				auto getFloat = [](const json& p, const std::string& key) {
 					auto val = p.value(key, "0.0");
 					std::replace(val.begin(), val.end(), ',', '.');
@@ -220,38 +234,45 @@ namespace NR
 				};
 				if (b.contains("Pose")) {
 					auto& p = b["Pose"];
-					bone.RestPose.x = getFloat(p, "x") * 0.01;
-					bone.RestPose.y = getFloat(p, "y") * 0.01;
-					bone.RestPose.z = getFloat(p, "z") * 0.01;
+
+					bone.RestPose.Pos = torch::tensor({
+						getFloat(p, "x") * 0.01,
+						getFloat(p, "y") * 0.01,
+						getFloat(p, "z") * 0.01
+					});
 
 					if (p.contains("Pitch") || p.contains("Yaw") || p.contains("Roll")) {
 						float pitch = DegToRad(getFloat(p, "Pitch"));
 						float yaw   = DegToRad(getFloat(p, "Yaw"));
 						float roll  = DegToRad(getFloat(p, "Roll"));
-						Quat q = Quat::FromUnrealRotator(pitch, yaw, roll);
-						bone.RestPose.q1 = q.x;
-						bone.RestPose.q2 = q.y;
-						bone.RestPose.q3 = q.z;
-						bone.RestPose.qw = q.w;
 
-						std::cout << "Quat: " << pitch << ", " << yaw << ", " << roll << std::endl;
-						std::cout << "Quat: " << q.x << ", " << q.y << ", " << q.z << ", " << q.w << std::endl;
-					} else {
-						bone.RestPose.q1 = getFloat(p, "q1");
-						bone.RestPose.q2 = getFloat(p, "q2");
-						bone.RestPose.q3 = getFloat(p, "q3");
-						bone.RestPose.qw = getFloat(p, "qw");
+						if (OutQuat) {
+							bone.RestPose.Rot = OutQuat->ToQuat(pitch, yaw, roll);
+							std::cout << "Quat: " << pitch << ", " << yaw << ", " << roll << std::endl;
+						} else {
+							std::cerr << "Warning: OutQuat is null, skipping rotation parsing for bone " << bone.Name << std::endl;
+						}
 					}
 				}
+
 				if (b.contains("Limits")) {
 					auto& lim = b["Limits"];
-					bone.Limits.MinX = lim.value("MinX", -360.0f);
-					bone.Limits.MaxX = lim.value("MaxX", 360.0f);
-					bone.Limits.MinY = lim.value("MinY", -360.0f);
-					bone.Limits.MaxY = lim.value("MaxY", 360.0f);
-					bone.Limits.MinZ = lim.value("MinZ", -360.0f);
-					bone.Limits.MaxZ = lim.value("MaxZ", 360.0f);
+
+					RotationLimit limits;
+					limits.Min = torch::tensor({
+						DegToRad(lim.value("MinX", -360.0f)),
+						DegToRad(lim.value("MinY", -360.0f)),
+						DegToRad(lim.value("MinZ", -360.0f))
+					});
+					limits.Max = torch::tensor({
+						DegToRad(lim.value("MaxX", 360.0f)),
+						DegToRad(lim.value("MaxY", 360.0f)),
+						DegToRad(lim.value("MaxZ", 360.0f))
+					});
+
+					bone.Limits = limits;
 				}
+
 				if (b.contains("Childrens")) {
 					bone.ChildrenIndices = b["Childrens"].get<std::vector<int32_t>>();
 				}

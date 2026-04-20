@@ -27,6 +27,54 @@
 #include <Windows.h>
 #endif
 
+
+class TestQuatFromUnreal : public NR::IQuat
+{
+public:
+	[[nodiscard]] NR::Quat ToQuat(float pitch, float yaw, float roll) const override
+	{
+		float cr = std::cos(roll  * 0.5f);
+		float sr = std::sin(roll  * 0.5f);
+		float cp = std::cos(pitch * 0.5f);
+		float sp = std::sin(pitch * 0.5f);
+		float cy = std::cos(yaw   * 0.5f);
+		float sy = std::sin(yaw   * 0.5f);
+
+		// q = q_Yaw * q_Pitch * q_Roll
+		float x =  cy * cp * sr - sy * sp * cr;
+		float y =  cy * sp * cr + sy * cp * sr;
+		float z =  sy * cp * cr - cy * sp * sr;
+		float w =  cy * cp * cr + sy * sp * sr;
+		
+		return torch::tensor({x, y, z, w}, torch::kFloat32);
+	}
+
+	NR::Vec3 ToEuler(const NR::Quat& q) const override
+	{
+		auto q_norm = torch::nn::functional::normalize(q, torch::nn::functional::NormalizeFuncOptions().p(2).dim(-1));
+
+		auto x = q_norm.select(-1, 0);
+		auto y = q_norm.select(-1, 1);
+		auto z = q_norm.select(-1, 2);
+		auto w = q_norm.select(-1, 3);
+
+		// Roll (X)
+		auto sinr_cosp = 2.0f * (w * x + y * z);
+		auto cosr_cosp = 1.0f - 2.0f * (x * x + y * y);
+		auto roll = torch::atan2(sinr_cosp, cosr_cosp);
+
+		// Pitch (Y)
+		auto sinp = 2.0f * (w * y - z * x);
+		auto pitch = torch::asin(torch::clamp(sinp, -0.999999f, 0.999999f));
+
+		auto siny_cosp = 2.0f * (w * z + x * y);
+		auto cosy_cosp = 1.0f - 2.0f * (y * y + z * z);
+		auto yaw = torch::atan2(siny_cosp, cosy_cosp);
+
+		return torch::stack({pitch, yaw, roll}, -1);
+	}
+};
+
 class NRMultiHeadModel : public NR::IModel<float>
 {
 public:
@@ -90,9 +138,10 @@ int main()
 		return 1;
 	}
 
-	NRModelProfile activeProfile;
-	Rules activeRules;
-	std::shared_ptr<Solver> solver = nullptr;
+	NRModelProfile ActiveProfile;
+	Rules ActiveRules;
+	std::shared_ptr<Solver> NRSolver = nullptr;
+	std::shared_ptr<IQuat> CustomQuat = nullptr;
 
 	// std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
 	std::string DataAssetPath_IK = "Tests/Datasets/Rest_Pose_IK.json";
@@ -111,35 +160,40 @@ int main()
 	DataAssetPath_SK = std::filesystem::absolute(DataAssetPath_SK).string();
 	DataAssetPath_TW = std::filesystem::absolute(DataAssetPath_TW).string();
 
-	if (!Parse::LoadIKFromJson(DataAssetPath_IK, activeProfile))
+	if (!Parse::LoadIKFromJson(DataAssetPath_IK, ActiveProfile))
 	{
 		std::cerr << "Failed to load IK asset: " << DataAssetPath_IK << std::endl;
 		return 1;
 	}
 
-	if (!Parse::LoadSKFromJson(DataAssetPath_SK, activeProfile.Skeleton))
+	if (!CustomQuat)
+	{
+		CustomQuat = std::make_shared<TestQuatFromUnreal>();
+	}
+
+	if (!Parse::LoadSKFromJson(DataAssetPath_SK, ActiveProfile.Skeleton, CustomQuat.get()))
 	{
 		std::cerr << "Failed to load SK asset: " << DataAssetPath_SK << std::endl;
 		return 1;
 	}
 
-	if (!Parse::LoadTWFromJson(DataAssetPath_TW, activeProfile.TrainingWeights))
+	if (!Parse::LoadTWFromJson(DataAssetPath_TW, ActiveProfile.TrainingWeights))
 	{
 		std::cerr << "Failed to load TW asset: " << DataAssetPath_TW << std::endl;
 		return 1;
 	}
 
 	std::cout << "----------------------------------" << std::endl;
-	std::cout << "Profile loaded: " << activeProfile.ProfileName << std::endl;
-	std::cout << " -> Input Size: " << activeProfile.GetRequiredInputSize() << std::endl;
-	std::cout << " -> Output Size: " << activeProfile.GetRequiredOutputSize() << std::endl;
+	std::cout << "Profile loaded: " << ActiveProfile.ProfileName << std::endl;
+	std::cout << " -> Input Size: " << ActiveProfile.GetRequiredInputSize() << std::endl;
+	std::cout << " -> Output Size: " << ActiveProfile.GetRequiredOutputSize() << std::endl;
 
-	auto InputSize = activeProfile.GetRequiredInputSize();
-	auto out_size = activeProfile.GetRequiredOutputSize();
-	auto model = std::make_shared<NRMultiHeadModel>(InputSize, 512, out_size);
+	auto InputSize = ActiveProfile.GetRequiredInputSize();
+	auto OutSize = ActiveProfile.GetRequiredOutputSize();
+	auto Model = std::make_shared<NRMultiHeadModel>(InputSize, 512, OutSize);
 	std::cout << "Model created!" << std::endl;
 
-	auto trainee = std::make_shared<Trainee<float> >(model, activeProfile, activeRules, 4e-3);
+	auto NRTrainee = std::make_shared<Trainee<float> >(Model, CustomQuat.get(), ActiveProfile, ActiveRules, 4e-3);
 	std::cout << "Model trainee configuration!" << std::endl;
 
 	std::string ModelSavePath = "Datasets/trained_model.pt";
@@ -155,7 +209,7 @@ int main()
 	{
 		try
 		{
-			model->LoadModel(ModelSavePath);
+			Model->LoadModel(ModelSavePath);
 			std::cout << ">>> Modelo carregado com sucesso de: " << ModelSavePath << std::endl;
 		}
 		catch (const std::exception& e)
@@ -185,16 +239,16 @@ int main()
 					continue;
 				}
 
-				if (trainee)
+				if (NRTrainee)
 				{
-					int32_t requiredSize = activeProfile.GetRequiredInputSize();
+					int32_t requiredSize = ActiveProfile.GetRequiredInputSize();
 					if (data.size() < static_cast<size_t>(requiredSize))
 					{
 						std::cerr << "[Server] Incomplete data received: " << data.size() << " floats, expected at least " << requiredSize << std::endl;
 						continue;
 					}
 
-					float loss = trainee->TrainStep(data);
+					float loss = NRTrainee->TrainStep(data);
 					if (frameCounter++ % 30 == 0)
 					{
 						std::cout << "----------------------------------" << std::endl;
@@ -208,7 +262,7 @@ int main()
 					{
 						try
 						{
-							model->SaveModel(ModelSavePath);
+							Model->SaveModel(ModelSavePath);
 							std::cout << "[Checkpoint] Modelo salvo automaticamente em: " << ModelSavePath << " (Frame: " << frameCounter << ")" << std::endl;
 						}
 						catch (const std::exception& e)
@@ -217,27 +271,27 @@ int main()
 						}
 					}
 
-					if (trainee->IdealTargets.defined())
+					if (NRTrainee->IdealTargets.defined())
 					{
-						const float* dDataPtr = trainee->IdealTargets.data_ptr<float>();
-						auto dNumElements = trainee->IdealTargets.numel();
+						const float* dDataPtr = NRTrainee->IdealTargets.data_ptr<float>();
+						auto dNumElements = NRTrainee->IdealTargets.numel();
 						std::vector<float> debugData(dDataPtr, dDataPtr + dNumElements);
 
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!solver && loss < 2.0f)
+					if (!NRSolver && loss < 2.0f)
 					{
-						solver = std::make_shared<Solver>(model, activeProfile);
+						NRSolver = std::make_shared<Solver>(Model, ActiveProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;
 					}
 
-					if (solver)
+					if (NRSolver)
 					{
 						std::vector<float> solveInput(InputSize);
 						std::memcpy(solveInput.data(), data.data(), InputSize * sizeof(float));
 
-						std::vector<float> predicted = solver->Solve(solveInput);
+						std::vector<float> predicted = NRSolver->Solve(solveInput);
 						ClientSolver.Send(predicted, "127.0.0.1", 8006);
 					}
 				}

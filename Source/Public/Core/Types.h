@@ -34,161 +34,13 @@
 
 namespace NR
 {
-	struct Vec3
-	{
-		float x = 0.0f;
-		float y = 0.0f;
-		float z = 0.0f;
-	};
-
-	static Vec3 operator+(const Vec3& a, const Vec3& b)
-	{
-		return {a.x + b.x, a.y + b.y, a.z + b.z};
-	}
-
-	static Vec3 operator-(const Vec3& a, const Vec3& b)
-	{
-		return {a.x - b.x, a.y - b.y, a.z - b.z};
-	}
-
-	static Vec3 operator*(const Vec3& v, float s)
-	{
-		return {v.x * s, v.y * s, v.z * s};
-	}
-
-	static float Length(const Vec3& v)
-	{
-		return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-	}
-
-	struct Mat3
-	{
-		float m[3][3]{};
-
-		static Mat3 Identity()
-		{
-			Mat3 r;
-			r.m[0][0] = 1.0f;
-			r.m[0][1] = 0.0f;
-			r.m[0][2] = 0.0f;
-			r.m[1][0] = 0.0f;
-			r.m[1][1] = 1.0f;
-			r.m[1][2] = 0.0f;
-			r.m[2][0] = 0.0f;
-			r.m[2][1] = 0.0f;
-			r.m[2][2] = 1.0f;
-			return r;
-		}
-	};
-
-	static Mat3 Multiply(const Mat3& a, const Mat3& b)
-	{
-		Mat3 r{};
-		for (int i = 0; i < 3; ++i)
-		{
-			for (int j = 0; j < 3; ++j)
-			{
-				r.m[i][j] = 0.0f;
-				for (int k = 0; k < 3; ++k)
-					r.m[i][j] += a.m[i][k] * b.m[k][j];
-			}
-		}
-		return r;
-	}
-
-	static Vec3 Multiply(const Mat3& m, const Vec3& v)
-	{
-		return {
-			m.m[0][0] * v.x + m.m[0][1] * v.y + m.m[0][2] * v.z,
-			m.m[1][0] * v.x + m.m[1][1] * v.y + m.m[1][2] * v.z,
-			m.m[2][0] * v.x + m.m[2][1] * v.y + m.m[2][2] * v.z
-		};
-	}
-
-	static Mat3 RotX(float a)
-	{
-		const float c = std::cos(a);
-		const float s = std::sin(a);
-		return Mat3{{
-			{1, 0, 0},
-			{0, c, -s},
-			{0, s, c}
-		}};
-	}
-
-	static Mat3 RotY(float a)
-	{
-		const float c = std::cos(a);
-		const float s = std::sin(a);
-		return Mat3{{
-			{c, 0, s},
-			{0, 1, 0},
-			{-s, 0, c}
-		}};
-	}
-
-	static Mat3 RotZ(float a)
-	{
-		const float c = std::cos(a);
-		const float s = std::sin(a);
-		return Mat3{{
-			{c, -s, 0},
-			{s, c, 0},
-			{0, 0, 1}
-		}};
-	}
-
-	static Mat3 EulerXYZ(float x, float y, float z)
-	{
-		// Ordem: X -> Y -> Z
-		return Multiply(Multiply(RotX(x), RotY(y)), RotZ(z));
-	}
-
 	static float DegToRad(float deg)
 	{
 		return deg * 3.14159265358979323846f / 180.0f;
 	}
 
-	struct Quat
-	{
-		float x, y, z, w;
-
-		static Quat FromEulerXYZ(float x, float y, float z)
-		{
-			float cx = std::cos(x * 0.5f);
-			float sx = std::sin(x * 0.5f);
-			float cy = std::cos(y * 0.5f);
-			float sy = std::sin(y * 0.5f);
-			float cz = std::cos(z * 0.5f);
-			float sz = std::sin(z * 0.5f);
-
-			Quat q;
-			q.w = cx * cy * cz + sx * sy * sz;
-			q.x = sx * cy * cz - cx * sy * sz;
-			q.y = cx * sy * cz + sx * cy * sz;
-			q.z = cx * cy * sz - sx * sy * cz;
-			return q;
-		}
-
-		// Unreal Engine: FRotator(Pitch, Yaw, Roll) → q = q_Yaw(Z) * q_Pitch(Y) * q_Roll(X)
-		static Quat FromUnrealRotator(float pitch, float yaw, float roll)
-		{
-			float cr = std::cos(roll  * 0.5f);
-			float sr = std::sin(roll  * 0.5f);
-			float cp = std::cos(pitch * 0.5f);
-			float sp = std::sin(pitch * 0.5f);
-			float cy = std::cos(yaw   * 0.5f);
-			float sy = std::sin(yaw   * 0.5f);
-
-			// q = q_Yaw * q_Pitch * q_Roll
-			Quat q;
-			q.w =  cy * cp * cr + sy * sp * sr;
-			q.x =  cy * cp * sr - sy * sp * cr;
-			q.y =  cy * sp * cr + sy * cp * sr;
-			q.z =  sy * cp * cr - cy * sp * sr;
-			return q;
-		}
-	};
+	using Quat = torch::Tensor; // Shape [4] ou [N, 4]
+	using Vec3 = torch::Tensor; // Shape [3] ou [N, 3]
 
 	struct FootValidationPair
 	{
@@ -237,21 +89,19 @@ namespace NR
 		std::string Expr;
 	};
 
+	struct Pose {
+		Vec3 Pos; // [Position]
+		Quat Rot; // [Rotate]
+	};
+
+	struct RotationLimit {
+		torch::Tensor Min; // [MinX, MinY, MinZ]
+		torch::Tensor Max; // [MaxX, MaxY, MaxZ]
+	};
+
 	struct NRRule
 	{
-		struct RotationLimit
-		{
-			float MinX = -360.0f;
-			float MaxX = 360.0f;
-			float MinY = -360.0f;
-			float MaxY = 360.0f;
-			float MinZ = -360.0f;
-			float MaxZ = 360.0f;
-
-			[[nodiscard]] bool IsZero() const {
-				return MinX == 0.0f && MaxX == 0.0f && MinY == 0.0f && MaxY == 0.0f && MinZ == 0.0f && MaxZ == 0.0f;
-			}
-		};
+		torch::Tensor RestRotationEuler;
 
 		std::string Name;
 		std::map<std::string, double> Constants;
@@ -276,12 +126,8 @@ namespace NR
 			std::string Name;
 			int32_t Size = 0;
 			int32_t Offset = 0;
-			struct Pose
-			{
-				float x = 0, y = 0, z = 0;
-				float q1 = 0, q2 = 0, q3 = 0, qw = 1;
-			} RestPose;
-			NRRule::RotationLimit Limits;
+			Pose RestPose;
+			RotationLimit Limits;
 			std::vector<int32_t> ChildrenIndices;
 		};
 

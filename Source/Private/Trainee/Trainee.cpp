@@ -23,8 +23,9 @@
 namespace NR
 {
 	template<FloatingPoint T>
-	Trainee<T>::Trainee(std::shared_ptr<IModel<T> > TargetModel, NRModelProfile Rig, Rules& Ev, const double LearningRate)
+	Trainee<T>::Trainee(std::shared_ptr<IModel<T> > TargetModel, IQuat* QCustom, NRModelProfile Rig, Rules& Ev, const double LearningRate)
 		: TargetModel(TargetModel)
+		, QuatConverter(QCustom)
 		  , Evaluator(Ev)
 		  , RigDesc(std::move(Rig))
 	{
@@ -108,10 +109,6 @@ namespace NR
 		auto T_ideal = torch::zeros_like(Prediction);
 		for (size_t i = 0; i < RigDesc.Bindings.size(); ++i)
 		{
-			std::cout << "BoneName: " << RigDesc.Bindings[i].BoneName << std::endl;
-			std::cout << "RuleName: " << RigDesc.Bindings[i].RuleName << std::endl;
-			std::cout << "Offset: " << RigDesc.Bindings[i].Offset << std::endl;
-			std::cout << "Size: " << RigDesc.Bindings[i].Size << std::endl;
 			auto& varMap = Evaluator.Parsers[i].GetVar();
 			auto& binding = RigDesc.Bindings[i];
 
@@ -181,10 +178,6 @@ namespace NR
 			return (it != TW.LossWeights.end()) ? it->second.Weight : 1.0f;
 		};
 
-		auto Target_r = Target.index({0, torch::indexing::Slice(21, 24)});
-		auto Target_l = Target.index({0, torch::indexing::Slice(42, 45)});
-		auto Pre_r = Pred.index({0, torch::indexing::Slice(21, 24)});
-		auto Pre_l = Pred.index({0, torch::indexing::Slice(42, 45)});
 		auto Pre_p = Pred.index({0, torch::indexing::Slice(0, 7)});
 		auto Target_p = Target.index({0, torch::indexing::Slice(0, 7)});
 
@@ -195,12 +188,7 @@ namespace NR
 		// 1. Kinematics Loss (FK)
 		res.KinematicsLoss = ComputeFK(Pred, Target);
 		res.TotalLoss = res.TotalLoss + res.KinematicsLoss * getWeight("Objective");
-
 		res.PositionLoss = torch::mse_loss(Pre_p, Target_p) * getWeight("Position");
-		// 2. Position Loss (MSE between Pred and Ideal Target)
-		// res.PositionLoss = torch::mse_loss(Pre_r, Target_r) * getWeight("Position");
-		// res.PositionLoss = res.PositionLoss + torch::mse_loss(Pre_l, Target_l) * getWeight("Position");
-		// res.TotalLoss = res.TotalLoss + res.PositionLoss;
 
 		// 3. Temporal Loss
 		if (PrevPred.defined() && PrevPred.numel() > 0)
@@ -238,27 +226,16 @@ namespace NR
 		}
 
 		auto computeBoneLimitsLoss = [&](const NRSkeleton::Bone& bone) {
+			// Quat [x, y, z, w]
 			auto qDelta = Pred.index({0, torch::indexing::Slice(bone.Offset + 3, bone.Offset + 7)});
+			auto euler = QuatConverter->ToEuler(qDelta);
 
-			float minXR = DegToRad(bone.Limits.MinX);
-			float maxXR = DegToRad(bone.Limits.MaxX);
-			float minYR = DegToRad(bone.Limits.MinY);
-			float maxYR = DegToRad(bone.Limits.MaxY);
-			float minZR = DegToRad(bone.Limits.MinZ);
-			float maxZR = DegToRad(bone.Limits.MaxZ);
+			// if euler < min -> penalty. if euler > max -> penalty.
+			auto low_penalty = torch::clamp(bone.Limits.Min - euler, 0.0f);
+			auto high_penalty = torch::clamp(euler - bone.Limits.Max, 0.0f);
 
-			auto ex = 2.0f * qDelta[0];
-			auto ey = 2.0f * qDelta[1];
-			auto ez = 2.0f * qDelta[2];
-
-			float wIk = getWeight("Kinematics");
-
-			//
-			auto lx = wIk * torch::pow(torch::clamp(ex - maxXR, 0.0f) + torch::clamp(minXR - ex, 0.0f), 2);
-			auto ly = wIk * torch::pow(torch::clamp(ey - maxYR, 0.0f) + torch::clamp(minYR - ey, 0.0f), 2);
-			auto lz = wIk * torch::pow(torch::clamp(ez - maxZR, 0.0f) + torch::clamp(minZR - ez, 0.0f), 2);
-
-			return lx + ly + lz;
+			torch::Tensor loss = (low_penalty.pow(2) + high_penalty.pow(2)).sum() * getWeight("Objective");
+			return loss;
 		};
 
 		// Apply parent limits
@@ -266,26 +243,24 @@ namespace NR
 		limitsLoss = limitsLoss + computeBoneLimitsLoss(RigDesc.Skeleton.Parent);
 		res.TotalLoss = res.TotalLoss + limitsLoss;
 
-		for (const auto& binding : RigDesc.Bindings)
+		// Apply bone limits
+		for (const auto& chain : RigDesc.Skeleton.Rest)
 		{
-			if (binding.Size >= 7)
+			for (const auto& bone : chain)
 			{
-				auto q = Pred.index({0, torch::indexing::Slice(binding.Offset + 3, binding.Offset + 7)});
-				res.QuaternionNormLoss = res.QuaternionNormLoss + torch::pow(torch::norm(q, 2) - 1.0f, 2);
-
-				// Apply bone limits
-				for (const auto& chain : RigDesc.Skeleton.Rest)
-				{
-					for (const auto& bone : chain)
-					{
-						if (bone.Name == binding.BoneName)
-						{
-							limitsLoss = limitsLoss + computeBoneLimitsLoss(bone);
-						}
-					}
-				}
+				limitsLoss = limitsLoss + computeBoneLimitsLoss(bone);
 			}
 		}
+
+		for (const auto& Outputs : RigDesc.Outputs)
+		{
+			if (Outputs.FloatCount == 7)
+			{
+				auto q = Pred.index({0, torch::indexing::Slice(Outputs.Offset + 3, Outputs.Offset + 7)});
+				res.QuaternionNormLoss = res.QuaternionNormLoss + torch::pow(torch::norm(q, 2) - 1.0f, 2);
+			}
+		}
+
 		limitsLoss = limitsLoss * getWeight("Kinematics");
 		res.TotalLoss = res.TotalLoss + res.QuaternionNormLoss * getWeight("QuaternionNorm");
 
@@ -355,11 +330,8 @@ namespace NR
 				const auto& bone = SK.Rest[chainIdx][boneIdx];
 
 				// Rest bones pose
-				auto pRest = torch::tensor(
-					{bone.RestPose.x, bone.RestPose.y, bone.RestPose.z},
-					Pred.options()
-				);
-				auto qRest = torch::tensor({bone.RestPose.q1,bone.RestPose.q2,bone.RestPose.q3,bone.RestPose.qw}, Pred.options());
+				auto pRest = bone.RestPose.Pos;
+				auto qRest = bone.RestPose.Rot;
 				auto mRest = quatToMat(qRest);
 
 				// Predicate bones pose
@@ -370,6 +342,23 @@ namespace NR
 				// pChain + mChain * pRest
 				auto pChild = pChain + torch::mv(mChain, pLocal);
 				auto mChild = torch::mm(mChain, mLocal);
+
+				//
+				auto anatomyPosLoss = torch::mse_loss(pLocal, pRest);
+				auto anatomyRotLoss = torch::mse_loss(mLocal, mRest);
+
+				// std::cout << "================="<<bone.Name<<"=================" << std::endl;
+				// std::cout << "pChain: " << pChain << " " << pChain.numel() << std::endl;
+				// std::cout << "mChain: " << mChain << " " << mChain.numel() << std::endl;
+				// std::cout << "=================Child=================" << std::endl;
+				// std::cout << "pChild: " << pChild << " " << pChild.numel() << std::endl;
+				// std::cout << "mChild: " << mChild << " " << mChild.numel() << std::endl;
+				// std::cout << "=================Local=================" << std::endl;
+				// std::cout << "pRest: " << pLocal << " " << pLocal.numel() << std::endl;
+				// std::cout << "mRest: " << mLocal << " " << mLocal.numel() << std::endl;
+				// std::cout << "=================Rest=================" << std::endl;
+				// std::cout << "pRest: " << pRest << " " << pRest.numel() << std::endl;
+				// std::cout << "mRest: " << mRest << " " << mRest.numel() << std::endl;
 
 				// Bias Multiplier
 				float bonePosMultiplier = 1.0f;
@@ -389,14 +378,25 @@ namespace NR
 				auto boneLengthLoss = torch::pow(predLength - restLength, 2) * bonePosMultiplier;
 
 				// Penalty for quaternion normalization
-				auto quatNormLoss = torch::pow(torch::norm(qLocal, 2) - 1.0f, 2) * wQuat;
+				auto qLocalNorm = torch::norm(qLocal, 2);
+				auto quatNormLoss = torch::pow(qLocalNorm - 1.0f, 2) * wQuat;
 
-				totalLoss = totalLoss + quatNormLoss + boneLengthLoss;
+				auto rotMagnitude = torch::sum(torch::pow(qLocal.index({torch::indexing::Slice(0, 3)}), 2));
+				auto rotLoss = torch::clamp(rotMagnitude - 0.5f, 0.0f) * wQuat;
+
+				totalLoss = totalLoss + quatNormLoss + boneLengthLoss + rotLoss;
+
+				auto ikLoss = torch::zeros({}, Pred.options());
 				if (boneIdx == SK.Rest[chainIdx].size() - 1)
 				{
 					auto pTarget = Target.index({0, torch::indexing::Slice(bone.Offset, bone.Offset + 3)});
-					totalLoss = totalLoss + (torch::mse_loss(pChild, pTarget) * pFk);
+					ikLoss = torch::mse_loss(pChild, pTarget);
 				}
+
+				float pTargetWeight = (anatomyPosLoss.item<float>() < 0.05f) ? pFk : 0.001f;
+				float rIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? wFk : 0.001f;
+				float pIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? pFk : 0.001f;
+				totalLoss = totalLoss + (anatomyPosLoss * pIkWeight) + (anatomyRotLoss * rIkWeight) + (ikLoss * pTargetWeight);
 
 				pChain = pChild;
 				mChain = mChild;

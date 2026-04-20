@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "Core/Rules.h"
+#include "Interfaces/IQuat.h"
 
 namespace NR
 {
@@ -38,6 +39,7 @@ namespace NR
 		NRModelProfile RigDesc;
 		std::unordered_map<std::string, NRRule> V_rules;
 
+
 	public:
 		/**
 		 * Calculates the next rotation for a given trainee in a training schedule.
@@ -45,12 +47,15 @@ namespace NR
 		 * @param TargetModel The current trainee's identifier.
 		 * @param Rig The list of all trainees in the schedule.
 		 * @param LearningRate The step or interval to determine the next trainee.
+		 * @param QCustom Optional custom quaternion converter for specific training scenarios.
 		 */
 		torch::Tensor IdealTargets;
 		torch::Tensor Predicated;
 		torch::Tensor PredHistory;
 		torch::Tensor PredHistory2;
 		torch::Tensor SmoothedOutput;
+		IQuat* QuatConverter = nullptr;
+
 
 		std::vector<torch::Tensor> PredictionCandidates;
 		static constexpr size_t MaxCandidates = 10;
@@ -64,11 +69,12 @@ namespace NR
 		 * Retrieves the next trainee in the training sequence based on the current state.
 		 *
 		 * @param TargetModel
+		 * @param QCustom
 		 * @param Rig
 		 * @param Ev
 		 * @param LearningRate
 		 */
-		Trainee(std::shared_ptr<IModel<T> > TargetModel, NRModelProfile Rig, Rules& Ev, double LearningRate = 1e-3);
+		Trainee(std::shared_ptr<IModel<T> > TargetModel, IQuat* QCustom, NRModelProfile Rig, Rules& Ev, double LearningRate = 1e-3);
 
 		/**
 		 * Executes the next step in the training process by determining the current stage.

@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "Types.h"
+#include "Interfaces/IQuat.h"
 
 namespace NR
 {
@@ -30,7 +31,7 @@ namespace NR
 		static bool LoadProfileFromJson(const std::string& FilePath, NRModelProfile& OutProfile);
 
 		static bool LoadIKFromJson(const std::string& FilePath, NRModelProfile& OutProfile);
-		static bool LoadSKFromJson(const std::string& FilePath, NRSkeleton& OutSkeleton);
+		static bool LoadSKFromJson(const std::string& FilePath, NRSkeleton& OutSkeleton, IQuat* OutQuat);
 		static bool LoadTWFromJson(const std::string& FilePath, NRTrainingWeights& OutWeights);
 	};
 } // namespace NR
