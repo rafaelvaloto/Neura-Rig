@@ -9,7 +9,7 @@
     },
     "LossWeights": {
       "Objective": {
-        "Weight": 15.0,
+        "Weight": 30.0,
         "Description": "wPos: Distance error between the predicted bone and the ideal IK target foot - Objective."
       },
       "Position": {
@@ -40,43 +40,43 @@
     "BoneSpecificBias": [
       {
         "Name": "pelvis",
-        "PositionMultiplier": 1.0,
-        "RotationMultiplier": 5.0,
+        "PositionMultiplier": 10.0,
+        "RotationMultiplier": 10.0,
         "Comment": "Higher rotation bias to keep the X-up orientation stable."
       },
       {
         "Name": "thigh_r",
-        "PositionMultiplier": 0.5,
-        "RotationMultiplier": 1.0,
+        "PositionMultiplier": 50.0,
+        "RotationMultiplier": 15.0,
         "Comment": "Higher position bias for precise floor contact."
       },
       {
         "Name": "thigh_l",
-        "PositionMultiplier": 0.5,
-        "RotationMultiplier": 1.0,
+        "PositionMultiplier": 50.0,
+        "RotationMultiplier": 15.0,
         "Comment": "Higher position bias for precise floor contact."
       },
       {
         "Name": "calf_r",
-        "PositionMultiplier": 0.5,
-        "RotationMultiplier": 1.0,
+        "PositionMultiplier": 15.0,
+        "RotationMultiplier": 15.0,
         "Comment": "Higher position bias for precise floor contact."
       },
       {
         "Name": "calf_l",
-        "PositionMultiplier": 0.5,
-        "RotationMultiplier": 1.0,
+        "PositionMultiplier": 15.0,
+        "RotationMultiplier": 15.0,
         "Comment": "Higher position bias for precise floor contact."
       },
       {
         "Name": "foot_r",
-        "PositionMultiplier": 0.5,
+        "PositionMultiplier": 1.0,
         "RotationMultiplier": 1.0,
         "Comment": "Higher position bias for precise floor contact."
       },
       {
         "Name": "foot_l",
-        "PositionMultiplier": 0.5,
+        "PositionMultiplier": 1.0,
         "RotationMultiplier": 1.0,
         "Comment": "Higher position bias for precise floor contact."
       }

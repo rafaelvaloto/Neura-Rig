@@ -143,7 +143,7 @@ int main()
 	std::shared_ptr<Solver> NRSolver = nullptr;
 	std::shared_ptr<IQuat> CustomQuat = nullptr;
 
-	// std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
+	//std::string DataAssetPath_IK = "Tests/Datasets/Foot_IK.json";
 	std::string DataAssetPath_IK = "Tests/Datasets/Rest_Pose_IK.json";
 	std::string DataAssetPath_SK = "Tests/Datasets/Foot_SK.json";
 	std::string DataAssetPath_TW = "Tests/Datasets/Foot_TW.json";
@@ -280,7 +280,7 @@ int main()
 						ClientDebug.Send(debugData, "127.0.0.1", 8007);
 					}
 
-					if (!NRSolver && loss < 2.0f)
+					if (!NRSolver)
 					{
 						NRSolver = std::make_shared<Solver>(Model, ActiveProfile);
 						std::cout << "=== SWITCHING TO SOLVER MODE ===" << std::endl;

@@ -322,8 +322,14 @@ namespace NR
 
 		for (size_t chainIdx = 0; chainIdx < SK.Rest.size(); ++chainIdx)
 		{
+			auto pRest = SK.Parent.RestPose.Pos;
+			auto qRest = SK.Parent.RestPose.Rot;
+			auto mRest = quatToMat(qRest);
+
 			auto pChain = pParent;
 			auto mChain = mParentPred;
+			auto mAcc = pRest;
+			auto pAcc = mRest;
 
 			for (size_t boneIdx = 0; boneIdx < SK.Rest[chainIdx].size(); ++boneIdx)
 			{
@@ -343,30 +349,33 @@ namespace NR
 				auto pChild = pChain + torch::mv(mChain, pLocal);
 				auto mChild = torch::mm(mChain, mLocal);
 
+
+
 				//
 				auto anatomyPosLoss = torch::mse_loss(pLocal, pRest);
 				auto anatomyRotLoss = torch::mse_loss(mLocal, mRest);
 
-				// std::cout << "================="<<bone.Name<<"=================" << std::endl;
-				// std::cout << "pChain: " << pChain << " " << pChain.numel() << std::endl;
-				// std::cout << "mChain: " << mChain << " " << mChain.numel() << std::endl;
-				// std::cout << "=================Child=================" << std::endl;
-				// std::cout << "pChild: " << pChild << " " << pChild.numel() << std::endl;
-				// std::cout << "mChild: " << mChild << " " << mChild.numel() << std::endl;
-				// std::cout << "=================Local=================" << std::endl;
-				// std::cout << "pRest: " << pLocal << " " << pLocal.numel() << std::endl;
-				// std::cout << "mRest: " << mLocal << " " << mLocal.numel() << std::endl;
-				// std::cout << "=================Rest=================" << std::endl;
-				// std::cout << "pRest: " << pRest << " " << pRest.numel() << std::endl;
-				// std::cout << "mRest: " << mRest << " " << mRest.numel() << std::endl;
+				std::cout << "================="<<bone.Name<<"=================" << std::endl;
+				std::cout << "pChain: " << pChain << " " << pChain.numel() << std::endl;
+				std::cout << "mChain: " << mChain << " " << mChain.numel() << std::endl;
+				std::cout << "=================Child=================" << std::endl;
+				std::cout << "pChild: " << pChild << " " << pChild.numel() << std::endl;
+				std::cout << "mChild: " << mChild << " " << mChild.numel() << std::endl;
+				std::cout << "=================Local=================" << std::endl;
+				std::cout << "pRest: " << pLocal << " " << pLocal.numel() << std::endl;
+				std::cout << "mRest: " << mLocal << " " << mLocal.numel() << std::endl;
+				std::cout << "=================Rest=================" << std::endl;
+				std::cout << "pRest: " << pRest << " " << pRest.numel() << std::endl;
+				std::cout << "mRest: " << mRest << " " << mRest.numel() << std::endl;
 
-				// Bias Multiplier
 				float bonePosMultiplier = 1.0f;
+				float boneRotMultiplier = 1.0f;
 				for (const auto& bias : TW.BoneSpecificBias)
 				{
 					if (bias.Name == bone.Name)
 					{
 						bonePosMultiplier = bias.PositionMultiplier;
+						boneRotMultiplier = bias.RotationMultiplier;
 						break;
 					}
 				}
@@ -394,12 +403,14 @@ namespace NR
 				}
 
 				float pTargetWeight = (anatomyPosLoss.item<float>() < 0.05f) ? pFk : 0.001f;
-				float rIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? wFk : 0.001f;
-				float pIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? pFk : 0.001f;
+				float rIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? wFk * boneRotMultiplier : 0.001f;
+				float pIkWeight = (anatomyPosLoss.item<float>() > 0.05f) ? pFk * bonePosMultiplier : 0.001f;
 				totalLoss = totalLoss + (anatomyPosLoss * pIkWeight) + (anatomyRotLoss * rIkWeight) + (ikLoss * pTargetWeight);
 
 				pChain = pChild;
 				mChain = mChild;
+				mAcc = mAcc + mChild;
+				pAcc = pAcc + pChild;
 			}
 		}
 

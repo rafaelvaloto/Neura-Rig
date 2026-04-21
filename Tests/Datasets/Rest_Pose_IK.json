@@ -86,9 +86,9 @@
           {
             "id": "global",
             "condition": "1.0",
-            "offset_x": "-f_offset",
-            "offset_y": "0.05",
-            "offset_z": "0.10"
+            "offset_x": "-0.41705421",
+            "offset_y": "0.0",
+            "offset_z": "0.086"
           }
         ]
       },
@@ -101,9 +101,9 @@
           {
             "id": "global",
             "condition": "1.0",
-            "offset_x": "f_offset",
-            "offset_y": "0.15",
-            "offset_z": "0.10"
+            "offset_x": "0.41705421",
+            "offset_y": "0.0",
+            "offset_z": "0.086"
           }
         ]
       }
